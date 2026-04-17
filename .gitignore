@@ -39,3 +39,8 @@ desktop.ini
 
 # Logs
 *.log
+logs_*.txt
+
+# Smoke-test artifacts
+results/*_smoke_*
+figures/*_smoke_*
