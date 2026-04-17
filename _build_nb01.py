@@ -135,7 +135,21 @@ optimizer = torch.optim.Adam(model.parameters(), lr=cfg['lr'], weight_decay=cfg[
 log = {'epoch': [], 'loss': [], 'knn_epoch': [], 'knn_acc': [], 'epoch_sec': []}
 os.makedirs('models', exist_ok=True); os.makedirs('results', exist_ok=True)
 
-for epoch in range(1, cfg['epochs']+1):
+start_epoch = 1
+# --- Resume logic ---
+# Set FORCE_RESTART = True to discard any existing checkpoint and train from scratch.
+FORCE_RESTART = False
+if (not FORCE_RESTART) and os.path.exists(cfg['ckpt_path']):
+    ckpt = torch.load(cfg['ckpt_path'], map_location='cpu', weights_only=False)
+    model.load_state_dict(ckpt['model_state']); model.to(device)
+    if 'optimizer_state' in ckpt: optimizer.load_state_dict(ckpt['optimizer_state'])
+    if 'log' in ckpt: log = ckpt['log']
+    start_epoch = ckpt.get('epoch', 0) + 1
+    print(f"RESUMING from {cfg['ckpt_path']} at epoch {start_epoch} (done {ckpt.get('epoch', 0)}/{cfg['epochs']}).", flush=True)
+else:
+    print(f"Starting fresh. Checkpoint saved every epoch to {cfg['ckpt_path']}.", flush=True)
+
+for epoch in range(start_epoch, cfg['epochs']+1):
     model.train()
     t0 = time.time()
     loss_sum, n_batches = 0.0, 0
@@ -164,10 +178,17 @@ for epoch in range(1, cfg['epochs']+1):
         msg += f'  | kNN={acc*100:.2f}%'
     print(msg, flush=True)
 
-    # Periodic checkpoint
-    if epoch % 50 == 0 or epoch == cfg['epochs']:
-        torch.save({'epoch': epoch, 'model_state': model.state_dict(), 'config': cfg}, cfg['ckpt_path'])
-        with open(cfg['log_path'], 'w') as f: json.dump(log, f, indent=2)
+    # Atomic checkpoint every epoch (write .tmp then rename — crash-safe).
+    tmp_path = cfg['ckpt_path'] + '.tmp'
+    torch.save({
+        'epoch': epoch,
+        'model_state': model.state_dict(),
+        'optimizer_state': optimizer.state_dict(),
+        'log': log,
+        'config': cfg,
+    }, tmp_path)
+    os.replace(tmp_path, cfg['ckpt_path'])
+    with open(cfg['log_path'], 'w') as f: json.dump(log, f, indent=2)
 
 print('Training complete. Final kNN:', log['knn_acc'][-1] if log['knn_acc'] else 'n/a')
 print('Checkpoint:', cfg['ckpt_path'])
