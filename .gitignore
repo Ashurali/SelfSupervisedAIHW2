@@ -1,0 +1,41 @@
+# Virtual environments
+hw2_env/
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Datasets (downloaded on demand)
+data/
+
+# Model checkpoints (large binaries)
+models/*.pth
+models/*.pt
+models/*.ckpt
+
+# Keep the models directory itself
+!models/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
