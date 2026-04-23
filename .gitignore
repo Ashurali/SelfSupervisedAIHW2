@@ -20,12 +20,21 @@ __pycache__/
 data/
 
 # Model checkpoints (large binaries)
+models/**/*.pth
+models/**/*.pt
+models/**/*.ckpt
 models/*.pth
 models/*.pt
 models/*.ckpt
 
+# Cached feature tensors (Phase 8)
+results/features/
+
 # Keep the models directory itself
 !models/.gitkeep
+
+# Local Claude workspace metadata
+.claude/
 
 # OS
 .DS_Store
