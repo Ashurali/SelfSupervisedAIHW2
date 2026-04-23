@@ -49,17 +49,24 @@ jupyter notebook
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | SimCLR baseline (200 ep) | ⏳ |
-| 2 | Supervised baseline (200 ep) | — |
-| 3 | Random baseline (linear probe only) | — |
-| 4 | Temperature ablation (τ ∈ {0.1, 0.5, 1.0, 5.0}) | — |
-| 5 | Batch size ablation ({32, 64, 128, 256, 512}) | — |
-| 6 | Augmentation ablation | — |
-| 7 | Projector head ablation | — |
-| 8 | Transfer learning (CIFAR-100, STL-10) | — |
-| 9 | Final analysis & report figures | — |
+| 1 | SimCLR baseline (200 ep) | ✅ |
+| 2 | Supervised baseline (200 ep) | ✅ |
+| 3 | Random baseline (linear probe only) | ✅ |
+| 4 | Temperature ablation (τ ∈ {0.1, 0.5, 1.0, 5.0}) | ready |
+| 5 | Batch size ablation ({64, 128, 256}) | ready |
+| 6 | Augmentation ablation (no_color / no_gray / crop_only / stronger) | ready |
+| 7 | Projector head ablation (with/without; probe h vs z) | ready |
+| 8 | Transfer learning (CIFAR-100, STL-10) | ready |
+| 9 | Final analysis & aggregate figures | ready |
 
-Ablations run at **100 epochs** for time; baselines run at 200.
+Baselines run at 200 epochs. Ablations run at **50–100 epochs** to fit
+DirectML's training budget. Phase 1 (τ=0.5, bs=256, full aug) is reused
+from disk as the baseline row in every ablation rather than being
+retrained from scratch.
+
+Every training loop saves an atomic checkpoint every epoch and
+automatically resumes from disk on restart — Windows Update etc. won't
+destroy progress.
 
 ## DirectML Notes
 
