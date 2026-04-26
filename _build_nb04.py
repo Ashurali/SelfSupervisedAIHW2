@@ -121,7 +121,7 @@ def train_simclr_at_tau(tau: float) -> dict:
     ckpt_path = _ckpt_path(tau)
     # Fresh model but seeded, so each tau starts from the same init
     torch.manual_seed(cfg['seed'])
-    model = SimCLRModel(get_cifar_resnet18(), ProjectionHead(512, 512, 128)).to(device)
+    model = SimCLRModel(get_cifar_resnet18(), hidden_dim=512, proj_dim=128).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=cfg['lr'], weight_decay=cfg['weight_decay'])
     log = {'epoch': [], 'loss': [], 'knn_epoch': [], 'knn_acc': [], 'epoch_sec': []}
     start_epoch = 1

@@ -58,7 +58,7 @@ from utils import (
 )
 
 # Toggle: set True to run on a fraction (quick smoke).
-SMOKE_TEST = True  # TEMP — smoke-test before full run
+SMOKE_TEST = False
 
 cfg = dict(
     batch_size   = 256,
@@ -87,8 +87,15 @@ BACKBONES = {
     'supervised': 'models/supervised_baseline.pth',
     'random':     'models/random_baseline_backbone.pth',
 }
-# Datasets
-DATASETS = ['cifar100', 'stl10']
+# Datasets — STL-10 added only if its 2.5 GB tarball is fully downloaded.
+# (Stanford's mirror is slow; we let an external curl fetch in the background.)
+_stl_path = os.path.join(cfg['data_root'], 'stl10_binary.tar.gz')
+_stl_ready = os.path.exists(_stl_path) and os.path.getsize(_stl_path) >= 2_600_000_000
+if SMOKE_TEST:
+    DATASETS = ['cifar100']
+else:
+    DATASETS = ['cifar100', 'stl10'] if _stl_ready else ['cifar100']
+print('Datasets:', DATASETS, ' (stl10_ready=' + str(_stl_ready) + ')')
 """)
 
 # --- Cell 2: Backbone loader
@@ -139,6 +146,9 @@ def get_splits(name: str):
         n_classes = 100
     elif name == 'stl10':
         # STL-10 has 5000 labeled train, 8000 test, 10 classes, native 96x96.
+        # Large (~2.6 GB) — if the download keeps failing, pre-fetch manually:
+        #   curl -L -o data/stl10_binary.tar.gz -C - http://ai.stanford.edu/~acoates/stl10/stl10_binary.tar.gz
+        # and torchvision will verify md5 and extract on next run.
         tr = STL10(cfg['data_root'], split='train', download=True, transform=transfer_transform)
         te = STL10(cfg['data_root'], split='test',  download=True, transform=transfer_transform)
         n_classes = 10
@@ -146,11 +156,22 @@ def get_splits(name: str):
         raise ValueError(name)
     return tr, te, n_classes
 
+# Skip datasets that fail to download/verify — keeps smoke-test usable even if
+# one dataset is temporarily unreachable.
 info = {}
+available_datasets = []
 for name in DATASETS:
-    tr, te, k = get_splits(name)
-    info[name] = dict(train=tr, test=te, n_classes=k)
-    print(f'{name:10s} | train={len(tr):6d} | test={len(te):6d} | classes={k}')
+    try:
+        tr, te, k = get_splits(name)
+        info[name] = dict(train=tr, test=te, n_classes=k)
+        available_datasets.append(name)
+        print(f'{name:10s} | train={len(tr):6d} | test={len(te):6d} | classes={k}')
+    except Exception as e:
+        print(f'{name:10s} | SKIPPED ({type(e).__name__}: {e})')
+
+DATASETS = available_datasets  # shadow so downstream cells only use what loaded
+if not DATASETS:
+    raise RuntimeError('No transfer datasets available — check network / disk.')
 """)
 
 # --- Cell 4: Feature extraction (cached)

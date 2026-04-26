@@ -211,7 +211,7 @@ code("""# --- Cell 5: Run the three probes (A, B, C) ---
 print('Loading Phase 1 baseline model from', cfg['baseline_ckpt'])
 ck1 = torch.load(cfg['baseline_ckpt'], map_location='cpu', weights_only=False)
 
-model_A = SimCLRModel(get_cifar_resnet18(), ProjectionHead(512, 512, 128)).to(device)
+model_A = SimCLRModel(get_cifar_resnet18(), hidden_dim=512, proj_dim=128).to(device)
 model_A.load_state_dict(ck1['model_state'])
 model_A.eval()
 for p in model_A.parameters(): p.requires_grad = False
