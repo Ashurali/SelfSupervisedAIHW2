@@ -28,12 +28,20 @@ CIFAR10_STD = (0.2023, 0.1994, 0.2010)
 
 # --- Device --------------------------------------------------------------
 def get_device():
-    """Return the DirectML device (falls back to CPU if unavailable)."""
+    """Return the best available device.
+
+    Priority: DirectML (this project's primary target — AMD on Windows)
+    -> CUDA (for portability when running on an NVIDIA box)
+    -> CPU (last resort).
+    """
     try:
         import torch_directml
         return torch_directml.device()
     except Exception:
-        return torch.device("cpu")
+        pass
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
 
 
 # --- Backbone ------------------------------------------------------------

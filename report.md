@@ -295,7 +295,22 @@ This isolates the central practical promise of SSL — that an
 unlabeled pretraining step is most valuable when downstream labels
 are scarce.
 
-*[Numbers and figure 8 to be inserted after running notebook 10.]*
+| Labels used | SimCLR probe | Supervised-frozen probe | Random-frozen probe |
+|------------:|-------------:|------------------------:|--------------------:|
+| 1 %         | **80.88 %**    | 91.45 %                | 26.73 % |
+| 10 %        | **84.25 %**    | 91.74 %                | 34.59 % |
+| 50 %        | **86.31 %**    | 91.92 %                | 38.51 % |
+| 100 %       | **86.66 %**    | 92.10 %                | 40.41 % |
+
+The single most striking number in this report: with **just 1 %** of
+CIFAR-10 labels (500 images), the SimCLR probe reaches 80.88 % —
+within 5.8 pp of its full-data accuracy. The random baseline at 1 %
+labels is only 26.73 %. The supervised-frozen row is included for
+completeness; it is essentially flat across label fractions because
+the supervised backbone was trained on *all* CIFAR-10 labels and
+its representation already aligns with the test classes — so the
+probe just learns a 10×512 readout regardless of how many labels
+are exposed.
 
 ![Figure 8 — Label efficiency on CIFAR-10](figures/fig8_label_efficiency_cifar10.png)
 *Figure 8 — Linear-probe accuracy as a function of training-label fraction. Frozen backbones: SimCLR (Phase 1), supervised, random.*
@@ -310,6 +325,28 @@ test images per backbone, colored by true class.
 
 #### 3.9.3 Per-class accuracy & confusion structure
 
+| Class    | SimCLR probe | Supervised-frozen probe | Δ (SimCLR − Supervised) |
+|----------|-------------:|------------------------:|------------------------:|
+| airplane | 89.90 %      | 91.90 %                 | −2.00 |
+| auto     | 96.30 %      | 95.30 %                 | **+1.00** |
+| bird     | 79.90 %      | 87.40 %                 | −7.50 |
+| cat      | 71.70 %      | 83.10 %                 | −11.40 |
+| deer     | 83.20 %      | 93.80 %                 | −10.60 |
+| dog      | 75.90 %      | 88.40 %                 | **−12.50** |
+| frog     | 91.20 %      | 93.80 %                 | −2.60 |
+| horse    | 89.00 %      | 94.20 %                 | −5.20 |
+| ship     | 95.30 %      | 95.70 %                 | −0.40 |
+| truck    | 93.60 %      | 95.60 %                 | −2.00 |
+
+The gap between SimCLR and supervised is **not uniform**: SimCLR is
+within 2 pp on the rigid-shape vehicle classes (auto, ship, truck,
+airplane, frog), but loses 10–12 pp on the fine-grained animal
+classes (cat, dog, deer, bird). The SSL representation evidently
+captures shape-and-color silhouette structure cheaply but struggles
+to discriminate visually-similar animals from each other without
+label guidance. Auto is the only class where SimCLR *beats*
+supervised (+1.0 pp).
+
 ![Figure 10 — Per-class accuracy](figures/fig10_per_class_accuracy.png)
 *Figure 10 — Per-class linear-probe accuracy of the SimCLR vs supervised-frozen backbones on CIFAR-10.*
 
@@ -319,7 +356,21 @@ test images per backbone, colored by true class.
 #### 3.9.4 Bonus — label efficiency on CIFAR-100 transfer
 
 The same label-efficiency sweep on CIFAR-100 features cached in
-Phase 8.
+Phase 8 — these are the strongest numbers in the report:
+
+| Labels used | SimCLR probe | Supervised-frozen probe | Random-frozen probe | SimCLR − Supervised |
+|------------:|-------------:|------------------------:|--------------------:|--------------------:|
+| 1 %         | **20.13 %**  | 15.50 %                 | 6.72 %              | **+4.63 pp** |
+| 10 %        | **36.55 %**  | 35.56 %                 | 11.45 %             | +0.99 pp |
+| 50 %        | **45.68 %**  | 43.63 %                 | 15.26 %             | +2.05 pp |
+| 100 %       | **49.43 %**  | 47.14 %                 | 17.93 %             | +2.29 pp |
+
+SimCLR beats the supervised backbone on CIFAR-100 transfer **at every
+label fraction**, and its advantage is **largest in the low-label
+regime** (+4.63 pp at 1 %). This is the canonical SSL claim made
+concrete: a label-free pretrained representation transfers more
+robustly than a representation specialized to a particular labeled
+task, especially when downstream labels are scarce.
 
 ![Figure 11 — Label efficiency on CIFAR-100 transfer](figures/fig11_label_efficiency_cifar100.png)
 *Figure 11 — Label efficiency on CIFAR-100 transfer features.*
