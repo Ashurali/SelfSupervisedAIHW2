@@ -57,7 +57,7 @@ BASELINE_TEMP = 0.5               # Phase 1 default
 
 cfg = dict(
     batch_size    = 256,
-    ssl_epochs    = 3  if SMOKE_TEST else 100,
+    ssl_epochs    = 3  if SMOKE_TEST else 200,
     probe_epochs  = 3  if SMOKE_TEST else 50,
     lr            = 3e-4,
     probe_lr      = 1e-3,

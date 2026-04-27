@@ -1,0 +1,18 @@
+# Lab-server (Linux + RTX 5090, sm_120 Blackwell, CUDA 12.8) requirements.
+#
+# Install with:
+#   conda create -n hw2 python=3.12 -y
+#   conda activate hw2
+#   pip install -r requirements_cuda.txt --index-url https://download.pytorch.org/whl/cu128 --extra-index-url https://pypi.org/simple
+#
+# DO NOT install torch-directml here — it's the Windows/AMD path. utils.get_device()
+# falls through to CUDA automatically when torch_directml isn't importable.
+
+torch>=2.6
+torchvision>=0.21
+numpy
+matplotlib
+scikit-learn
+tqdm
+nbformat
+jupyter

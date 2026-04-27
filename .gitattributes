@@ -1,0 +1,3 @@
+# Ensure shell scripts always have LF endings, so they run on the lab server
+# even after a Windows checkout adds CRLFs.
+*.sh text eol=lf

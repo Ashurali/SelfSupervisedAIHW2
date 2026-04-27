@@ -57,7 +57,7 @@ BATCH_SIZES     = [128, 64]     # bs=256 comes from Phase 1
 BASELINE_BS     = 256
 
 cfg = dict(
-    ssl_epochs    = 2  if SMOKE_TEST else 50,
+    ssl_epochs    = 2  if SMOKE_TEST else 200,
     probe_epochs  = 3  if SMOKE_TEST else 50,
     lr            = 3e-4,
     probe_lr      = 1e-3,

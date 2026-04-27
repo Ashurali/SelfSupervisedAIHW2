@@ -58,7 +58,7 @@ SMOKE_TEST = False
 
 cfg = dict(
     batch_size    = 256,
-    ssl_epochs    = 2  if SMOKE_TEST else 50,
+    ssl_epochs    = 2  if SMOKE_TEST else 200,
     probe_epochs  = 3  if SMOKE_TEST else 50,
     lr            = 3e-4,
     probe_lr      = 1e-3,
