@@ -375,6 +375,53 @@ task, especially when downstream labels are scarce.
 ![Figure 11 — Label efficiency on CIFAR-100 transfer](figures/fig11_label_efficiency_cifar100.png)
 *Figure 11 — Label efficiency on CIFAR-100 transfer features.*
 
+### 3.10 Extended SimCLR training (Phase 1b, 600 epochs)
+
+The SimCLR paper's Figure 9 reports near-monotonic improvement from
+100 → 1000 epochs on ImageNet. To check whether our CIFAR-10 setup
+exhibits the same behavior, we trained an additional SimCLR run for
+**600 epochs** (3× the Phase-1 budget) on a separate machine with the
+same configuration: τ = 0.5, batch size 256, full augmentation
+pipeline, identical seed, identical resume-safe checkpoint logic. The
+linear-probe protocol matches every other probe in this report.
+
+| Metric                         | 200 ep (Phase 1) | 600 ep (Phase 1b) | Δ |
+|--------------------------------|-----------------:|------------------:|--:|
+| Final NT-Xent loss             |          4.500   |          4.435    | −0.065 |
+| Final kNN-monitor accuracy     |         84.54 %  |         87.95 %   | +3.41 pp |
+| **Linear-probe best test acc** |     **86.70 %**  |     **88.88 %**   | **+2.18 pp** |
+| Linear-probe final test acc    |         86.34 %  |         88.56 %   | +2.22 pp |
+
+**The extended run closes ≈37 % of the gap to the supervised
+end-to-end baseline** — from 5.84 pp (92.54 − 86.70) down to 3.66 pp
+(92.54 − 88.88) — at the cost of triple the SSL training time. The
+relationship is monotonic but with sharply diminishing returns:
+
+| Epoch range | kNN slope per 100 ep |
+|-------------|---------------------:|
+| 100 → 200   |             +4.34 pp |
+| 200 → 400   |             +1.23 pp |
+| 400 → 600   |             +0.08 pp |
+
+By epoch 400 the kNN curve is essentially flat. We attribute this to
+two limitations of our configuration relative to the original SimCLR
+paper: a much smaller batch size (256 vs. their 8192, so far fewer
+in-batch negatives per step) and a smaller backbone (ResNet-18 vs.
+ResNet-50), both of which cap how much additional structure the model
+can extract from continued contrastive training.
+
+A separate point worth noting: the contrastive loss continues to
+*decrease* (4.500 → 4.435) even as the kNN accuracy plateaus
+(84.54 % → 87.95 %, with most of the gain in the first 200 extra
+epochs). This reinforces a methodological choice we made early —
+**monitoring kNN accuracy rather than loss during training** — since
+NT-Xent loss tracks cosine-similarity geometry that may continue to
+sharpen long after the linear separability of the representation has
+saturated.
+
+![Figure 12 — 200 vs 600 epoch comparison](figures/fig12_extended_training_comparison.png)
+*Figure 12 — Left: kNN-monitor trajectories of the 200-epoch and 600-epoch SimCLR runs (identical seed, so the curves overlap perfectly through epoch 200). Right: linear-probe accuracy curves on the two frozen backbones — the 600-epoch backbone is uniformly ≈2 pp above the 200-epoch one across all 100 probe epochs.*
+
 ---
 
 ## 4. Discussion
@@ -474,3 +521,4 @@ slowdown from this.
 | 7 | Projector ablation (1 × 100 ep)       | ~5 h   |
 | 8 | Transfer learning (CIFAR-100 + STL-10)| ~30 min (features cached) |
 | 10| Deeper analysis                       | ~30 min |
+| 1b| Extended SimCLR 600 ep (separate GPU) | ~15 h |

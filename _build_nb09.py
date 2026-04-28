@@ -54,8 +54,14 @@ rows = []
 # Phase 1 — SimCLR baseline probe
 p1 = load('simclr_baseline_linear_probe.json')
 if p1:
-    rows.append(('SimCLR (Phase 1, probe)',
+    rows.append(('SimCLR (Phase 1, 200ep, probe)',
                  p1.get('final_test_acc'), p1.get('best_test_acc')))
+
+# Phase 1b — SimCLR extended (600 ep)
+p1b = load('simclr_extended_600ep_linear_probe.json')
+if p1b:
+    rows.append(('SimCLR extended (Phase 1b, 600ep, probe)',
+                 p1b.get('final_test_acc'), p1b.get('best_test_acc')))
 
 # Phase 2 — Supervised
 p2 = load('supervised_baseline_log.json')
