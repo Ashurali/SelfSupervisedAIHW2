@@ -1,5 +1,6 @@
 experiment,final_test_acc,best_test_acc
-"SimCLR (Phase 1, probe)",86.34,86.70
+"SimCLR (Phase 1, 200ep, probe)",86.34,86.70
+"SimCLR extended (Phase 1b, 600ep, probe)",88.56,88.88
 Supervised (Phase 2),91.47,92.54
 "Random-init (Phase 3, probe)",41.39,41.76
 SimCLR tau=0.1 (Phase 4),81.45,81.55
