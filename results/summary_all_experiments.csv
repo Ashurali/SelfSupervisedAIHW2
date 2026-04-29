@@ -3,18 +3,18 @@ experiment,final_test_acc,best_test_acc
 "SimCLR extended (Phase 1b, 600ep, probe)",88.56,88.88
 Supervised (Phase 2),91.47,92.54
 "Random-init (Phase 3, probe)",41.39,41.76
-SimCLR tau=0.1 (Phase 4),81.45,81.55
-SimCLR tau=1.0 (Phase 4),83.13,83.13
-SimCLR tau=5.0 (Phase 4),76.16,76.40
-SimCLR bs=128 (Phase 5),80.93,80.93
-SimCLR bs=64 (Phase 5),80.55,80.72
-SimCLR aug=no_color (Phase 6),73.27,73.27
-SimCLR aug=no_gray (Phase 6),70.48,70.57
-SimCLR aug=crop_only (Phase 6),57.07,57.35
-SimCLR aug=stronger (Phase 6),79.91,79.91
+SimCLR tau=0.1 (Phase 4),84.09,84.35
+SimCLR tau=1.0 (Phase 4),86.41,86.76
+SimCLR tau=5.0 (Phase 4),81.30,81.33
+SimCLR bs=128 (Phase 5),87.27,87.27
+SimCLR bs=64 (Phase 5),87.08,87.12
+SimCLR aug=no_color (Phase 6),81.54,81.73
+SimCLR aug=no_gray (Phase 6),80.49,80.85
+SimCLR aug=crop_only (Phase 6),65.04,65.18
+SimCLR aug=stronger (Phase 6),86.43,86.60
 "A: +proj, probe h (Phase 7)",86.58,86.73
-"B: no-proj, probe h (Phase 7)",75.39,75.70
-"C: +proj, probe z (Phase 7)",82.94,83.08
+"B: no-proj, probe h (Phase 7)",83.64,83.71
+"C: +proj, probe z (Phase 7)",82.92,83.09
 Transfer: cifar100 / simclr (Phase 8),49.72,50.07
 Transfer: cifar100 / supervised (Phase 8),48.51,48.84
 Transfer: cifar100 / random (Phase 8),18.80,19.48

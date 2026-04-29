@@ -97,8 +97,12 @@ Two evaluations are run on every encoder:
 
 Both SimCLR and supervised baselines train for 200 epochs with Adam
 (lr $3\times10^{-4}$, weight decay $10^{-6}$). Batch size 256.
-Ablations are run at 100 SSL epochs to fit a single overnight window;
-the τ = 0.5, batch size = 256 row is the Phase 1 baseline (200 ep)
+Ablations are also run at **200 SSL epochs**, matching the Phase-1
+baseline so every row in every ablation table is directly
+comparable. (An earlier round of ablations at 100 epochs is preserved
+in git history for reference; we report only the 200-ep numbers
+here, since several qualitative findings differ between the two
+budgets.) The τ = 0.5, batch size = 256 row is the Phase 1 baseline
 in every table. All training loops save an atomic checkpoint every
 epoch and resume from disk on restart, so partial runs interrupted
 by Windows updates etc. lose at most one epoch of compute.
@@ -158,18 +162,21 @@ sweep τ ∈ {0.1, 0.5, 1.0, 5.0}; τ = 0.5 is the Phase-1 baseline.
 
 | τ    | SSL epochs | Probe best |
 |-----:|-----------:|-----------:|
-| 0.1  | 100        | 81.55 % |
-| 0.5\* | 200       | **86.70 %** |
-| 1.0  | 100        | 83.13 % |
-| 5.0  | 100        | 76.40 % |
+| 0.1  | 200        |   84.35 %  |
+| 0.5\* | 200       |   86.70 %  |
+| 1.0  | 200        | **86.76 %** |
+| 5.0  | 200        |   81.33 %  |
 
 \*Phase 1 baseline reused.
 
-τ = 0.5 wins clearly. Very small τ (0.1) over-weights the single
-hardest negative and produces a noisier gradient; very large τ (5.0)
-flattens the distribution so that no negative dominates and the
-contrastive signal collapses (10.3 pp worse than τ = 0.5). The pattern
-matches Table 5 of [1].
+The accuracy curve is U-shaped, but with a notably **flat optimum
+between τ = 0.5 and τ = 1.0** — the two are statistically
+indistinguishable (86.70 % vs. 86.76 %). Extreme values still hurt:
+τ = 0.1 (over-weights the single hardest negative, noisier gradient)
+costs 2.4 pp, and τ = 5.0 (flattens the similarity distribution so
+no negative dominates) costs 5.4 pp. The qualitative shape matches
+Table 5 of [1], though the basin around the optimum is wider in our
+setup than in the original ImageNet results.
 
 ![Figure 3 — Temperature ablation](figures/fig3_ablation_temperature.png)
 *Figure 3 — Linear-probe accuracy vs NT-Xent temperature.*
@@ -181,17 +188,28 @@ the main source of contrastive signal. We sweep BS ∈ {64, 128, 256}.
 
 | Batch size | SSL epochs | Probe best |
 |-----------:|-----------:|-----------:|
-| 64         | 100        | 80.72 % |
-| 128        | 100        | 80.93 % |
-| 256\*      | 200        | **86.70 %** |
+| 64         | 200        |   87.12 %  |
+| 128        | 200        | **87.27 %** |
+| 256\*      | 200        |   86.70 %  |
 
 \*Phase 1 baseline reused.
 
-Doubling batch size from 128 to 256 lifts probe accuracy by 5.8 pp
-(though the 256 baseline also has 2× more SSL epochs, partially
-inflating the gap). The 64 ↔ 128 step is essentially flat,
-suggesting the bottleneck below ~200 negatives is something other
-than negative count.
+This is the most surprising finding of the project: at matched
+training time, **batch size 64 and 128 each slightly *outperform* the
+256-baseline** (by 0.4–0.6 pp). An earlier round of these same
+ablations at 100 epochs had shown the opposite ordering — bs = 256
+ahead of bs = 64 / 128 by ~6 pp — exactly the result the SimCLR
+literature would lead one to expect. The pattern reverses once the
+smaller-batch runs are given enough epochs to see a comparable total
+number of negatives.
+
+So the bottleneck below ~200 negatives is **not** negative count per
+se, but *cumulative* exposure. With a fixed 200-epoch budget, all
+three batch sizes converge to roughly the same probe accuracy, with
+the smaller batches even gaining a small edge — possibly because
+each gradient step is noisier and acts as implicit regularization.
+The original "more negatives = better" SimCLR result holds only at
+matched *step* counts, not matched *epoch* counts at this scale.
 
 ![Figure 4 — Batch size ablation](figures/fig4_ablation_batchsize.png)
 *Figure 4 — Linear-probe accuracy vs SSL batch size.*
@@ -212,20 +230,26 @@ four variants:
 | Augmentation     | Probe best | Δ vs full |
 |------------------|-----------:|----------:|
 | Full (baseline)\* | **86.70 %** | — |
-| stronger          | 79.91 %  | −6.79 pp |
-| no_color          | 73.27 %  | −13.43 pp |
-| no_gray           | 70.57 %  | −16.13 pp |
-| crop_only         | 57.35 %  | **−29.35 pp** |
+| stronger          |   86.60 %  | −0.10 pp |
+| no_color          |   81.73 %  | −4.97 pp |
+| no_gray           |   80.85 %  | −5.85 pp |
+| crop_only         |   65.18 %  | **−21.52 pp** |
 
 \*Phase 1 baseline reused.
 
-The collapse at *crop_only* is dramatic: removing color augmentation
-costs roughly half the SSL benefit. Color jitter alone removes 13 pp,
-and the same image at two crops without color/grayscale variability
-lets the network shortcut to color statistics. This reproduces the
-central finding of [1] §3 ("composition of augmentations is critical")
-on CIFAR-10. *Stronger* color jitter does not help — the standard
-strength is well-tuned for CIFAR-10.
+The collapse at *crop_only* is the headline result: removing both
+color transforms costs **21.5 pp**, more than the next-worst
+ablation by a factor of 4. Two crops of the same image without
+color/grayscale variability lets the network shortcut to color
+statistics, exactly as predicted by [1] §3 ("composition of
+augmentations is critical"). Dropping just one of the two color
+transforms costs 5–6 pp; the two are clearly partially redundant
+since dropping both costs much more than the sum.
+
+*Stronger* color jitter is statistically indistinguishable from the
+default — the standard CIFAR-10 strength is already in a flat
+optimum, and pushing it further yields no benefit (and in this case,
+no measurable harm either).
 
 ![Figure 5 — Augmentation ablation](figures/fig5_ablation_augmentation.png)
 *Figure 5 — Linear-probe accuracy under five augmentation regimes.*
@@ -245,15 +269,23 @@ configurations:
 | Configuration                          | Probe best |
 |----------------------------------------|-----------:|
 | **A.** + projector, probe *h* (Phase 1) | **86.73 %** |
-| **B.** no projector, probe *h*          | 75.70 % |
-| **C.** + projector, probe *z*           | 83.08 % |
+| **B.** no projector, probe *h*          |   83.71 %  |
+| **C.** + projector, probe *z*           |   83.09 %  |
 
-A − B = +11.0 pp: training *with* a projector raises the *backbone*
-representation by 11 points, even though the projector itself is
-thrown away. A − C = +3.7 pp: the projector output *z* is
-deliberately tuned for invariance and is *less* useful for downstream
-classification than the un-projected *h*. Both findings reproduce
-[1] Figure 8.
+A − B = **+3.0 pp**: training *with* a projector raises the
+*backbone* representation by 3 points, even though the projector
+itself is thrown away. A − C = **+3.6 pp**: the projector output *z*
+is deliberately tuned for invariance and is less useful for
+downstream classification than the un-projected *h*. Interestingly,
+B and C end up almost tied (83.71 % vs. 83.09 %) — at 200 epochs the
+no-projector backbone is no worse than probing on the projected
+features of a *with*-projector model. Both qualitative findings
+(projector helps, probe-h-not-z) reproduce [1] Figure 8, although
+the magnitude of the projector benefit in our 200-epoch CIFAR-10
+setup (3 pp) is smaller than the original ImageNet result. (An
+earlier 100-epoch version of this ablation showed the projector
+benefit at 11 pp; see "Discussion" for the implication that the
+no-projector representation simply takes longer to catch up.)
 
 ![Figure 6 — Projector ablation](figures/fig6_ablation_projector.png)
 *Figure 6 — Effect of the projector head and the choice of representation for downstream probing.*
@@ -434,15 +466,23 @@ saturated.
 *(Prompts: how close does SimCLR come to supervised on CIFAR-10?
 Was the projector benefit larger or smaller than I expected? Was the
 crop-only collapse surprising? Did anything in the transfer numbers
-surprise me — e.g. supervised winning on STL-10?)*
+surprise me — e.g. supervised winning on STL-10? **The biggest
+surprise — at matched 200 epochs, smaller batches (64, 128) actually
+slightly *outperformed* batch size 256, the opposite of the
+canonical SimCLR finding. What does that say about the role of
+"more negatives" in the contrastive objective?**)*
 
 ### 4.2 Factors affecting results
 
 *(Prompts: which design choice contributed the largest accuracy
-swing — augmentation, batch size, temperature, or projector? What
-trade-offs did I make for compute — ablations at 100 ep vs. baseline
-200 ep? Did DirectML's CPU fallback for `aten::lerp` materially
-slow training?)*
+swing? **Answer to ground myself: augmentation — specifically the
+crop-only ablation, which costs 21.5 pp.** Compare to temperature
+(±5 pp), batch size (±0.6 pp at matched epochs), projector (±3 pp).
+Did DirectML's CPU fallback for `aten::lerp` materially slow
+training? Did running ablations at 100 ep first, then re-running at
+200 ep, materially change my conclusions? **Yes — bs and projector
+ablation conclusions both flipped between 100 ep and 200 ep, which
+is itself a methodological point worth discussing.**)*
 
 ### 4.3 What I would do with more time
 
