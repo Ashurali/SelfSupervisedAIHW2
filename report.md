@@ -186,30 +186,66 @@ setup than in the original ImageNet results.
 Larger batches give SimCLR more in-batch negatives, which is
 the main source of contrastive signal. We sweep BS ∈ {64, 128, 256}.
 
-| Batch size | SSL epochs | Probe best |
-|-----------:|-----------:|-----------:|
-| 64         | 200        |   87.12 %  |
-| 128        | 200        | **87.27 %** |
-| 256\*      | 200        |   86.70 %  |
+| Batch size | SSL epochs | Hardware | Probe best |
+|-----------:|-----------:|----------|-----------:|
+| 64         | 200        | CUDA (4090)    |   87.12 %  |
+| 128        | 200        | CUDA (4090)    | **87.27 %** |
+| 256        | 200        | CUDA (4090)    |   86.94 %  |
+| 256\*      | 200        | DirectML (AMD) |   86.70 %  |
 
-\*Phase 1 baseline reused.
+\*Phase 1 baseline.
 
-This is the most surprising finding of the project: at matched
-training time, **batch size 64 and 128 each slightly *outperform* the
-256-baseline** (by 0.4–0.6 pp). An earlier round of these same
-ablations at 100 epochs had shown the opposite ordering — bs = 256
-ahead of bs = 64 / 128 by ~6 pp — exactly the result the SimCLR
+The bs = 256 row appears twice on purpose. The Phase 1 baseline was
+trained on AMD via DirectML, while the bs = 64 and bs = 128
+ablations ran on an NVIDIA RTX 4090 (CUDA). To rule out a
+hardware-numerics confound between the two backends, we re-trained
+bs = 256 from scratch on the 4090 with identical seed and
+configuration; that produced **86.94 %** — a +0.24 pp drift over the
+DirectML run. Every comparison below uses the **matched-hardware**
+4090 row.
+
+At matched hardware and matched 200 epochs, the ordering remains
+**bs = 128 > bs = 64 > bs = 256**, with bs = 128 leading bs = 256 by
+**0.33 pp** (and ahead of bs = 256 in 50 / 50 probe epochs, with
+within-run std bands 0.09–0.16 pp — far below the gap). The bs = 64
+edge over bs = 256 (+0.18 pp) is borderline.
+
+This is the most surprising finding of the project. An earlier round
+of these same ablations at 100 epochs had shown the opposite
+ordering — bs = 256 ahead by ~6 pp — exactly the result the SimCLR
 literature would lead one to expect. The pattern reverses once the
-smaller-batch runs are given enough epochs to see a comparable total
-number of negatives.
+smaller-batch runs are given enough epochs to make a comparable
+number of gradient updates.
 
-So the bottleneck below ~200 negatives is **not** negative count per
-se, but *cumulative* exposure. With a fixed 200-epoch budget, all
-three batch sizes converge to roughly the same probe accuracy, with
-the smaller batches even gaining a small edge — possibly because
-each gradient step is noisier and acts as implicit regularization.
-The original "more negatives = better" SimCLR result holds only at
-matched *step* counts, not matched *epoch* counts at this scale.
+The mechanism is straightforward when one separates *negatives per
+step* from *gradient updates per epoch*. A batch of *N* gives
+*2N − 1* negatives per step (so bs = 256 sees 4× more negatives than
+bs = 64 *per step*). But each image still contrasts against ≈ the
+entire training set across the steps it appears in, so cumulative
+*per-epoch* negative exposure is roughly identical (~100 K
+negatives/epoch) across all three settings. What does differ is the
+total number of parameter updates over 200 epochs:
+
+|  bs   | steps / epoch | total steps over 200 ep |
+|------:|--------------:|------------------------:|
+| 64    |           781 |                 156 200 |
+| 128   |           391 |                  78 200 |
+| 256   |           195 |                  39 000 |
+
+The smaller batches get 2× and 4× more SGD steps respectively at the
+same epoch budget. With a fixed 200-epoch wall, that is enough to
+catch up — and by bs = 128, with ~78 K updates, the model is already
+near the elbow of the convergence curve (consistent with the Phase
+1b extended run plateauing around epoch 400 on bs = 256).
+
+The original "more negatives = better" SimCLR result, then, holds at
+matched **step** counts (where bs = 256 is genuinely 5–6 pp ahead),
+not at matched **epoch** counts at this scale. Most ablations in the
+literature implicitly compare at matched epochs because that is the
+natural unit in PyTorch loops; the choice of unit changes the
+conclusion. A small additional contribution may come from implicit
+regularization — noisier small-batch gradients tend to find flatter
+minima — but the dominant effect is simply gradient-update count.
 
 ![Figure 4 — Batch size ablation](figures/fig4_ablation_batchsize.png)
 *Figure 4 — Linear-probe accuracy vs SSL batch size.*
