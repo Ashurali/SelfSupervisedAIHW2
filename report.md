@@ -133,8 +133,7 @@ The Phase-1 SimCLR run trained for 200 epochs with τ = 0.5, batch size
 reached a best test accuracy of **86.70 %** and final accuracy of
 86.34 % (Figure 1, right).
 
-![Figure 1 — SimCLR training (kNN) and linear probe](figures/fig1_simclr_baseline.png)
-*Figure 1 — Left: SimCLR contrastive loss and kNN-monitor accuracy on CIFAR-10 over 200 epochs. Right: linear-probe test-accuracy curve on the frozen 200-epoch backbone.*
+![Left: SimCLR contrastive loss and kNN-monitor accuracy on CIFAR-10 over 200 epochs. Right: linear-probe test-accuracy curve on the frozen 200-epoch backbone.](figures/fig1_simclr_baseline.png)
 
 ### 3.2 Supervised baseline
 
@@ -164,35 +163,56 @@ of the architectural prior.
 | **SimCLR (200 ep) + linear probe**           | Probe    | **86.70 %** |
 | Random-init backbone + linear probe          | Probe    | 41.76 % |
 
-![Figure 2 — CIFAR-10 baseline comparison](figures/fig2_cifar10_comparison.png)
-*Figure 2 — CIFAR-10 baseline comparison: random < SimCLR-probe < supervised end-to-end.*
+![CIFAR-10 baseline comparison: random < SimCLR-probe < supervised end-to-end.](figures/fig2_cifar10_comparison.png)
 
-### 3.4 Temperature ablation (Phase 4)
+### 3.4 Other ablations (Phases 4, 6, 7) — temperature, augmentation, projector
 
-Temperature τ in the NT-Xent softmax controls how sharply the
-similarity distribution is concentrated on the hardest negatives. We
-sweep τ ∈ {0.1, 0.5, 1.0, 5.0}; τ = 0.5 is the Phase-1 baseline.
+Three smaller ablations complete the picture. All are run at 200
+SSL epochs with the τ = 0.5, bs = 256 row reused from Phase 1.
 
-| τ    | SSL epochs | Probe best |
-|-----:|-----------:|-----------:|
-| 0.1  | 200        |   84.35 %  |
-| 0.5\* | 200       |   86.70 %  |
-| 1.0  | 200        | **86.76 %** |
-| 5.0  | 200        |   81.33 %  |
+| Ablation | Variant | Probe best | Δ vs baseline |
+|----------|---------|-----------:|--------------:|
+| **Temperature** (Phase 4) | τ = 0.1 | 84.35 % | −2.35 pp |
+|   | τ = 0.5\* | 86.70 % | — |
+|   | τ = 1.0 | 86.76 % | +0.06 pp |
+|   | τ = 5.0 | 81.33 % | −5.37 pp |
+| **Augmentation** (Phase 6) | full\* | 86.70 % | — |
+|   | stronger | 86.60 % | −0.10 pp |
+|   | no_color | 81.73 % | −4.97 pp |
+|   | no_gray | 80.85 % | −5.85 pp |
+|   | crop_only | 65.18 % | **−21.52 pp** |
+| **Projector** (Phase 7) | A: + proj, probe *h*\* | 86.73 % | — |
+|   | B: no proj, probe *h* | 83.71 % | −3.02 pp |
+|   | C: + proj, probe *z* | 83.09 % | −3.64 pp |
 
 \*Phase 1 baseline reused.
 
-The accuracy curve is U-shaped, but with a notably **flat optimum
-between τ = 0.5 and τ = 1.0** — the two are statistically
-indistinguishable (86.70 % vs. 86.76 %). Extreme values still hurt:
-τ = 0.1 (over-weights the single hardest negative, noisier gradient)
-costs 2.4 pp, and τ = 5.0 (flattens the similarity distribution so
-no negative dominates) costs 5.4 pp. The qualitative shape matches
-Table 5 of [1], though the basin around the optimum is wider in our
-setup than in the original ImageNet results.
+**Temperature** has a flat optimum between τ = 0.5 and τ = 1.0 (the
+two are statistically indistinguishable). Extreme values produce the
+expected failure modes: τ = 0.1 over-weights the single hardest
+negative; τ = 5.0 flattens the similarity distribution so no
+negative is informative. The qualitative shape matches Table 5
+of [1].
 
-![Figure 3 — Temperature ablation](figures/fig3_ablation_temperature.png)
-*Figure 3 — Linear-probe accuracy vs NT-Xent temperature.*
+**Augmentation** is the largest accuracy lever in the project. The
+*crop_only* configuration costs **21.5 pp** — more than 4× any other
+ablation in this study — because two random crops of the same image
+without color/grayscale variability let the encoder shortcut to
+color statistics. Dropping either color transform alone costs
+5–6 pp; *stronger* color jitter is indistinguishable from the
+default, indicating the standard CIFAR-10 strength is already at a
+flat optimum.
+
+**Projector** training raises the backbone representation by
+**3.0 pp** even though the projector itself is discarded (A − B);
+probing the projector output *z* instead of the backbone output *h*
+loses **3.6 pp** (A − C), since *z* is deliberately tuned for
+augmentation-invariance and removes class-correlated signal in the
+process. Both qualitative findings reproduce [1] Figure 8. (An
+earlier 100-epoch version of this ablation showed the A − B benefit
+at 11 pp; we discuss that gap in §4.)
+
+![Smaller-ablation summary: temperature (left), augmentation (center), and projector (right) on CIFAR-10 linear probe.](figures/fig3_ablation_temperature.png)
 
 ### 3.5 Batch size ablation (Phase 5)
 
@@ -276,86 +296,9 @@ minima — but the dominant effect across the [32, 64, 128, 256] range
 is the trade-off between gradient-update count and contrastive-signal
 strength per update.
 
-![Figure 4 — Batch size ablation](figures/fig4_ablation_batchsize.png)
-*Figure 4 — Linear-probe accuracy vs SSL batch size.*
+![Linear-probe accuracy vs SSL batch size.](figures/fig4_ablation_batchsize.png)
 
-### 3.6 Augmentation ablation (Phase 6)
-
-Augmentation is the heart of contrastive learning: without strong
-augmentation, the two "views" are too similar and the model can match
-them by trivial pixel statistics. We compare the full pipeline against
-four variants:
-
-* **no_color** — drop ColorJitter
-* **no_gray** — drop RandomGrayscale
-* **crop_only** — drop both color transforms; keep only random
-  resized crop and horizontal flip
-* **stronger** — boost ColorJitter strength to (0.8, 0.8, 0.8, 0.2)
-
-| Augmentation     | Probe best | Δ vs full |
-|------------------|-----------:|----------:|
-| Full (baseline)\* | **86.70 %** | — |
-| stronger          |   86.60 %  | −0.10 pp |
-| no_color          |   81.73 %  | −4.97 pp |
-| no_gray           |   80.85 %  | −5.85 pp |
-| crop_only         |   65.18 %  | **−21.52 pp** |
-
-\*Phase 1 baseline reused.
-
-The collapse at *crop_only* is the headline result: removing both
-color transforms costs **21.5 pp**, more than the next-worst
-ablation by a factor of 4. Two crops of the same image without
-color/grayscale variability lets the network shortcut to color
-statistics, exactly as predicted by [1] §3 ("composition of
-augmentations is critical"). Dropping just one of the two color
-transforms costs 5–6 pp; the two are clearly partially redundant
-since dropping both costs much more than the sum.
-
-*Stronger* color jitter is statistically indistinguishable from the
-default — the standard CIFAR-10 strength is already in a flat
-optimum, and pushing it further yields no benefit (and in this case,
-no measurable harm either).
-
-![Figure 5 — Augmentation ablation](figures/fig5_ablation_augmentation.png)
-*Figure 5 — Linear-probe accuracy under five augmentation regimes.*
-
-### 3.7 Projector ablation (Phase 7)
-
-SimCLR introduces a small MLP "projector" between the backbone and the
-contrastive loss; the projector is then discarded. We test three
-configurations:
-
-* **A.** With projector, probe on backbone output *h* (= Phase 1)
-* **B.** No projector — backbone output is fed directly to the
-  contrastive loss; probe on *h*
-* **C.** With projector, but probe on the *projected* output *z*
-  instead of *h*
-
-| Configuration                          | Probe best |
-|----------------------------------------|-----------:|
-| **A.** + projector, probe *h* (Phase 1) | **86.73 %** |
-| **B.** no projector, probe *h*          |   83.71 %  |
-| **C.** + projector, probe *z*           |   83.09 %  |
-
-A − B = **+3.0 pp**: training *with* a projector raises the
-*backbone* representation by 3 points, even though the projector
-itself is thrown away. A − C = **+3.6 pp**: the projector output *z*
-is deliberately tuned for invariance and is less useful for
-downstream classification than the un-projected *h*. Interestingly,
-B and C end up almost tied (83.71 % vs. 83.09 %) — at 200 epochs the
-no-projector backbone is no worse than probing on the projected
-features of a *with*-projector model. Both qualitative findings
-(projector helps, probe-h-not-z) reproduce [1] Figure 8, although
-the magnitude of the projector benefit in our 200-epoch CIFAR-10
-setup (3 pp) is smaller than the original ImageNet result. (An
-earlier 100-epoch version of this ablation showed the projector
-benefit at 11 pp; see "Discussion" for the implication that the
-no-projector representation simply takes longer to catch up.)
-
-![Figure 6 — Projector ablation](figures/fig6_ablation_projector.png)
-*Figure 6 — Effect of the projector head and the choice of representation for downstream probing.*
-
-### 3.8 Transfer learning (Phase 8)
+### 3.6 Transfer learning (Phase 8)
 
 We freeze each backbone and linear-probe on two new datasets — CIFAR-100
 (100 classes, same 32×32 resolution) and STL-10 (10 classes, 96×96
@@ -377,14 +320,226 @@ image distribution (96×96 photographic images, downsampled to 32×32)
 differs significantly more from CIFAR-10 than CIFAR-100 does, and the
 supervised backbone's lower-level features happen to transfer well.
 
-![Figure 7 — Transfer learning](figures/fig7_transfer_learning.png)
-*Figure 7 — Transfer learning: linear-probe accuracy with each frozen backbone, evaluated on CIFAR-100 and STL-10.*
+![Transfer learning: linear-probe accuracy with each frozen backbone, evaluated on CIFAR-100 and STL-10.](figures/fig7_transfer_learning.png)
 
-### 3.9 Deeper analysis (Phase 10)
+
+## 4. Discussion
+
+### 4.1 Are these results expected? What surprised me?
+
+The headline gap on CIFAR-10 — supervised end-to-end at 92.54 % vs. a
+linear probe on the SimCLR representation at 86.70 % (88.88 % at 600
+epochs) — is consistent with prior work and matches what one should
+expect: the supervised network optimizes every layer against labels,
+while the SSL probe is restricted to a single 512×10 linear head over
+a frozen encoder. The gap closing from 5.84 pp at 200 epochs to
+3.66 pp at 600 epochs (Appendix C.2) reinforces the standard observation
+that contrastive objectives keep extracting useful structure long
+after a labeled cross-entropy loss has saturated.
+
+The most informative surprise was the projector head. At 100 epochs
+the projector contributed an 11 pp benefit to the backbone
+representation (§3.4); at 200 epochs the same comparison collapsed to
+≈3 pp. The interpretation that fits the data is that the projector
+mostly *accelerates convergence* of the backbone toward a linearly
+separable representation — given enough training, the no-projector
+variant largely catches up. This is consistent with the original
+SimCLR motivation for the projector (a "throwaway" head that absorbs
+contrastive-task-specific invariances) but adds a temporal dimension
+the original paper did not foreground.
+
+The transfer results also broke the way one would expect from the
+SSL literature. On CIFAR-100, where the input distribution is close
+to CIFAR-10, the SimCLR backbone *outperformed* the
+supervised-on-CIFAR-10 backbone by 1.2 pp under the identical
+linear-probe protocol (§3.6). This is the canonical "SSL features
+are less label-specialized and generalize better" story playing out
+on our own data. STL-10 reverses the ordering, with the supervised
+backbone ahead by 4.0 pp; we attribute this to the larger
+distributional gap (STL-10 is 96×96 photographic content downsampled
+to 32×32, with a coarser-grained label set), where the lower-level
+features the supervised network happened to learn happen to transfer
+well.
+
+The biggest single surprise was the matched-hardware batch-size
+sweep of §3.5. At 100 epochs the data showed bs = 256 ahead of
+bs = 64/128 by ≈6 pp — exactly the "more negatives = better" story.
+At 200 epochs and after extending the sweep down to bs = 32, the
+ordering is **U-shaped with an apex at bs = 128**: 86.34 % (bs = 32)
+< 87.12 % (bs = 64) < 87.27 % (bs = 128) > 86.94 % (bs = 256).
+Crucially, bs = 32 is the worst configuration of the four,
+disproving any naive "smaller is monotonically better" reading. We
+read this as evidence that batch size at matched epochs trades off
+two competing quantities — *contrastive-signal strength per gradient
+update* (which scales with batch size) and *total gradient updates
+per training budget* (which scales inversely) — and that on this
+dataset, with this backbone, the optimum lies near bs = 128 where
+neither term has yet crossed its respective failure-mode threshold.
+
+### 4.2 Factors affecting results
+
+Augmentation strength was the single largest accuracy lever in this
+study. The *crop_only* variant in §3.4 cost 21.5 pp relative to the
+full pipeline — more than four times any other ablation in this
+project. The mechanism is well-known: without color and grayscale
+augmentation, two random crops of the same image share enough
+low-level color statistics that the contrastive objective is
+trivially satisfied without the encoder having to learn semantic
+structure. The 21 pp drop quantifies just how much of "what SimCLR
+learns" on CIFAR-10 is *prevented* from collapsing into a color
+shortcut by the rest of the augmentation pipeline.
+
+Temperature was the second-largest, at ±5 pp across the swept range
+(§3.4). The standard interpretation applies: τ = 0.1 makes the
+softmax over similarities so peaked that gradients are dominated by
+the single hardest negative (high variance, slow learning); τ = 5.0
+flattens the distribution to the point that no negative is
+informative and the contrastive signal vanishes; τ ∈ [0.5, 1.0] sits
+in a flat optimum where neither failure mode dominates. The
+projector contributed ~3 pp at 200 epochs (§3.4) and is most
+naturally read, as above, as a convergence accelerator.
+
+Batch size proved the most subtle lever. At matched 200 epochs the
+total spread across {32, 64, 128, 256} on matched hardware is
+0.93 pp (86.34 % → 87.27 %) and is U-shaped, not monotonic — the
+extreme ends are both worse than the bs = 128 apex. The 6 pp
+100-epoch result for the [64, 128, 256] subset came not from a
+"more-negatives-is-better" effect but from bs = 256 being
+undertrained at 19 K gradient steps, while bs = 64/128 had 4× / 2×
+more steps over the same epoch budget. We see this as a real
+methodological point: most batch-size ablations in the SSL
+literature implicitly compare at matched *epochs*, while the
+underlying "more negatives" argument is a matched-*steps* claim.
+The two framings give different qualitative answers in the
+small-batch regime, and even at matched epochs the relationship is
+not monotonic — bs = 32 demonstrates that there is also a
+lower-bound failure mode where the contrastive signal per step
+becomes too weak for the extra updates to compensate.
+
+### 4.3 What I would do with more time
+
+Five extensions are natural, each producing a discrete report-level
+result.
+
+**(a) Extend the batch-size sweep upward.** The current range
+[32, 64, 128, 256] established the U shape and the bs = 128 apex;
+running bs = 512 or 1024 on a higher-VRAM card would test whether
+accuracy continues to decline past bs = 256, plateaus, or eventually
+recovers once per-step gradient quality wins back the budget it
+costs in fewer updates. A finer-grained sweep around the apex
+(e.g. bs ∈ {96, 128, 192}) would tighten the location of the
+optimum.
+
+**(b) Increase the SSL training budget further.** The 600-epoch
+extended run already shows that the kNN curve is nearly flat between
+epoch 400 and epoch 600 (Appendix C.2). A 1000–1500-epoch run would verify
+that the plateau is stable rather than a slow climb, and would let
+us cleanly separate the supervised-gap residue into representation-
+quality versus probe-linearity components.
+
+**(c) Train a deeper backbone.** ResNet-34 or ResNet-50 would test
+whether the SSL-vs-supervised gap narrows or widens with backbone
+capacity — one of the more practically relevant open questions for
+downstream applications.
+
+**(d) Add a second SSL method.** Replacing SimCLR with MoCo-v2 would
+reuse ≈80 % of the existing code and give a second contrastive
+baseline. It would also act as a compatibility test for the
+matched-step / matched-epoch finding of §3.5: if the U-shaped
+batch-size relationship holds for MoCo-v2 too, the framing
+generalizes; if not, the failure mode is SimCLR-specific.
+
+**(e) Broaden the augmentation sweep.** Adding transformations
+beyond the standard pipeline (Gaussian blur tuned for 32 × 32, mild
+random rotation, mixup-style view blending) would help separate
+which *components* of the standard pipeline carry the weight, beyond
+the already-clear color-vs-crop dichotomy of §3.4.
+
+### 4.4 What I learned
+
+Methodologically, the kNN monitor turned out to be a more
+informative training signal than the contrastive loss itself. The
+600-epoch run's loss decreased monotonically from 4.50 to 4.44 over
+its final 400 epochs while the kNN accuracy gained 3.4 pp and then
+plateaued — the two signals diverge once the cosine-similarity
+geometry continues to sharpen but linear separability has saturated.
+Loss decrease in a contrastive objective is therefore *necessary
+but not sufficient* evidence of representation improvement, and any
+ablation report that compares only final loss values is comparing a
+geometric proxy rather than a representation-quality measure.
+
+Engineering-wise, the resume-safe training loop was the single most
+important infrastructure decision. CIFAR-10 SimCLR runs on consumer
+hardware are 6–15 hour jobs and overlap with operating-system
+updates, driver crashes, and accidental session terminations. Atomic
+per-epoch checkpointing reduced the worst-case loss from "an entire
+overnight run" to "one epoch", and made the multi-host comparison in
+§3.5 (DirectML AMD, RTX 4090, RTX 3060) practically feasible.
+
+On the SimCLR architecture itself, the *h* vs. *z* probing
+asymmetry of §3.4 is in retrospect the most concrete example in this
+project of how representation choice shapes downstream evaluation.
+The projector head is trained to be invariant to the augmentations
+that produce two views of the same image; that invariance is exactly
+what the contrastive objective wants but it is also a destruction
+of any class information correlated with those augmentations. The
+3.6 pp drop from probing *h* to probing *z* (§3.4) quantifies the
+information removed by that invariance, and is a clean illustration
+of why the standard SimCLR recipe explicitly throws *z* away after
+training.
+
+Finally, the transfer-learning result of §3.6 — SimCLR ≥ supervised
+on CIFAR-100 despite supervised having "seen" CIFAR-10 labels — is
+the single observation that makes the SSL paradigm feel
+non-trivial. Supervised cross-entropy on CIFAR-10 trains the encoder
+to discriminate among ten specific classes; SSL trains it to be
+generally consistent under augmentation. The first objective makes
+the encoder's middle layers *worse* than the SSL encoder's at
+representing classes the encoder was never explicitly told about,
+even though the supervised encoder can read off CIFAR-10 labels with
+6 pp higher accuracy. This is a small instance of the broader
+argument for representation learning: an encoder trained on a more
+abstract objective can be more useful in settings the original
+training task did not anticipate.
+---
+
+## 5. References
+
+[1] Chen, T., Kornblith, S., Norouzi, M., & Hinton, G. (2020).
+**A Simple Framework for Contrastive Learning of Visual
+Representations**. *Proceedings of the 37th International Conference
+on Machine Learning (ICML 2020)*, 1597–1607. arXiv:2002.05709.
+
+[2] He, K., Zhang, X., Ren, S., & Sun, J. (2016). **Deep Residual
+Learning for Image Recognition**. *CVPR 2016*. arXiv:1512.03385.
+
+[3] Krizhevsky, A. (2009). **Learning Multiple Layers of Features from
+Tiny Images**. Technical report, University of Toronto. (CIFAR-10
+dataset.)
+
+[4] Coates, A., Lee, H., & Ng, A. Y. (2011). **An Analysis of
+Single-Layer Networks in Unsupervised Feature Learning**. *AISTATS
+2011*. (STL-10 dataset.)
+
+[5] van den Oord, A., Li, Y., & Vinyals, O. (2018).
+**Representation Learning with Contrastive Predictive Coding**.
+arXiv:1807.03748. (NT-Xent / InfoNCE loss origin.)
+
+[6] Wu, Z., Xiong, Y., Yu, S. X., & Lin, D. (2018). **Unsupervised
+Feature Learning via Non-Parametric Instance Discrimination**.
+*CVPR 2018*. (Memory-bank precursor; kNN-monitor protocol.)
+
+---
+
+## Appendix C — Deeper analysis & extended training
+
+These two analyses are reported here rather than in §3 to keep the main body within page-limit guidelines. They use the already-trained Phase 1 / 2 / 3 backbones and add no new SSL training (C.1) or one longer SSL run on a separate GPU (C.2).
+
+### C.1 Deeper analysis (Phase 10)
 
 Three additional analyses on the already-trained backbones:
 
-#### 3.9.1 Label efficiency
+#### C.1.1 Label efficiency
 
 We linear-probe each frozen backbone on subsets of the CIFAR-10 train
 set: 1 %, 10 %, 50 %, and 100 % of labels (stratified per class).
@@ -409,18 +564,16 @@ its representation already aligns with the test classes — so the
 probe just learns a 10×512 readout regardless of how many labels
 are exposed.
 
-![Figure 8 — Label efficiency on CIFAR-10](figures/fig8_label_efficiency_cifar10.png)
-*Figure 8 — Linear-probe accuracy as a function of training-label fraction. Frozen backbones: SimCLR (Phase 1), supervised, random.*
+![Linear-probe accuracy as a function of training-label fraction. Frozen backbones: SimCLR (Phase 1), supervised, random.](figures/fig8_label_efficiency_cifar10.png)
 
-#### 3.9.2 t-SNE feature visualization
+#### C.1.2 t-SNE feature visualization
 
 Two-dimensional t-SNE of the 512-d backbone output on 2 000 random
 test images per backbone, colored by true class.
 
-![Figure 9 — t-SNE of test features](figures/fig9_tsne_features.png)
-*Figure 9 — t-SNE of CIFAR-10 test features. Random init shows no class structure; SimCLR organizes the ten classes despite never seeing labels; supervised separation is sharper.*
+![t-SNE of CIFAR-10 test features. Random init shows no class structure; SimCLR organizes the ten classes despite never seeing labels; supervised separation is sharper.](figures/fig9_tsne_features.png)
 
-#### 3.9.3 Per-class accuracy & confusion structure
+#### C.1.3 Per-class accuracy & confusion structure
 
 | Class    | SimCLR probe | Supervised-frozen probe | Δ (SimCLR − Supervised) |
 |----------|-------------:|------------------------:|------------------------:|
@@ -444,13 +597,11 @@ to discriminate visually-similar animals from each other without
 label guidance. Auto is the only class where SimCLR *beats*
 supervised (+1.0 pp).
 
-![Figure 10 — Per-class accuracy](figures/fig10_per_class_accuracy.png)
-*Figure 10 — Per-class linear-probe accuracy of the SimCLR vs supervised-frozen backbones on CIFAR-10.*
+![Per-class linear-probe accuracy of the SimCLR vs supervised-frozen backbones on CIFAR-10.](figures/fig10_per_class_accuracy.png)
 
-![Figure 10b — Confusion matrices](figures/fig10b_confusion_matrices.png)
-*Figure 10b — Row-normalized confusion matrices for SimCLR (left) and supervised-frozen (right) linear probes on CIFAR-10.*
+![Row-normalized confusion matrices for SimCLR (left) and supervised-frozen (right) linear probes on CIFAR-10.](figures/fig10b_confusion_matrices.png)
 
-#### 3.9.4 Bonus — label efficiency on CIFAR-100 transfer
+#### C.1.4 Bonus — label efficiency on CIFAR-100 transfer
 
 The same label-efficiency sweep on CIFAR-100 features cached in
 Phase 8 — these are the strongest numbers in the report:
@@ -469,10 +620,9 @@ concrete: a label-free pretrained representation transfers more
 robustly than a representation specialized to a particular labeled
 task, especially when downstream labels are scarce.
 
-![Figure 11 — Label efficiency on CIFAR-100 transfer](figures/fig11_label_efficiency_cifar100.png)
-*Figure 11 — Label efficiency on CIFAR-100 transfer features.*
+![Label efficiency on CIFAR-100 transfer features.](figures/fig11_label_efficiency_cifar100.png)
 
-### 3.10 Extended SimCLR training (Phase 1b, 600 epochs)
+### C.2 Extended SimCLR training (Phase 1b, 600 epochs)
 
 The SimCLR paper's Figure 9 reports near-monotonic improvement from
 100 → 1000 epochs on ImageNet. To check whether our CIFAR-10 setup
@@ -516,223 +666,7 @@ NT-Xent loss tracks cosine-similarity geometry that may continue to
 sharpen long after the linear separability of the representation has
 saturated.
 
-![Figure 12 — 200 vs 600 epoch comparison](figures/fig12_extended_training_comparison.png)
-*Figure 12 — Left: kNN-monitor trajectories of the 200-epoch and 600-epoch SimCLR runs (identical seed, so the curves overlap perfectly through epoch 200). Right: linear-probe accuracy curves on the two frozen backbones — the 600-epoch backbone is uniformly ≈2 pp above the 200-epoch one across all 100 probe epochs.*
-
----
-
-## 4. Discussion
-
-### 4.1 Are these results expected? What surprised me?
-
-The headline gap on CIFAR-10 — supervised end-to-end at 92.54 % vs. a
-linear probe on the SimCLR representation at 86.70 % (88.88 % at 600
-epochs) — is consistent with prior work and matches what one should
-expect: the supervised network optimizes every layer against labels,
-while the SSL probe is restricted to a single 512×10 linear head over
-a frozen encoder. The gap closing from 5.84 pp at 200 epochs to
-3.66 pp at 600 epochs (§3.10) reinforces the standard observation
-that contrastive objectives keep extracting useful structure long
-after a labeled cross-entropy loss has saturated.
-
-The most informative surprise was the projector head. At 100 epochs
-the projector contributed an 11 pp benefit to the backbone
-representation (§3.7); at 200 epochs the same comparison collapsed to
-≈3 pp. The interpretation that fits the data is that the projector
-mostly *accelerates convergence* of the backbone toward a linearly
-separable representation — given enough training, the no-projector
-variant largely catches up. This is consistent with the original
-SimCLR motivation for the projector (a "throwaway" head that absorbs
-contrastive-task-specific invariances) but adds a temporal dimension
-the original paper did not foreground.
-
-The transfer results also broke the way one would expect from the
-SSL literature. On CIFAR-100, where the input distribution is close
-to CIFAR-10, the SimCLR backbone *outperformed* the
-supervised-on-CIFAR-10 backbone by 1.2 pp under the identical
-linear-probe protocol (§3.8). This is the canonical "SSL features
-are less label-specialized and generalize better" story playing out
-on our own data. STL-10 reverses the ordering, with the supervised
-backbone ahead by 4.0 pp; we attribute this to the larger
-distributional gap (STL-10 is 96×96 photographic content downsampled
-to 32×32, with a coarser-grained label set), where the lower-level
-features the supervised network happened to learn happen to transfer
-well.
-
-The biggest single surprise was the matched-hardware batch-size
-sweep of §3.5. At 100 epochs the data showed bs = 256 ahead of
-bs = 64/128 by ≈6 pp — exactly the "more negatives = better" story.
-At 200 epochs and after extending the sweep down to bs = 32, the
-ordering is **U-shaped with an apex at bs = 128**: 86.34 % (bs = 32)
-< 87.12 % (bs = 64) < 87.27 % (bs = 128) > 86.94 % (bs = 256).
-Crucially, bs = 32 is the worst configuration of the four,
-disproving any naive "smaller is monotonically better" reading. The
-finding we settle on is that batch size at matched epochs is a
-trade-off between two competing quantities — *contrastive-signal
-strength per gradient update* (which scales with batch size) and
-*total gradient updates per training budget* (which scales
-inversely) — and that on this dataset, with this backbone, the
-optimum lies near bs = 128 where neither has yet crossed its
-failure-mode threshold.
-
-### 4.2 Factors affecting results
-
-Augmentation strength was the single largest accuracy lever in this
-study. The *crop_only* ablation in §3.6 cost 21.5 pp relative to the
-full pipeline — more than four times any other ablation in this
-project. The mechanism is well-known: without color and grayscale
-augmentation, two random crops of the same image share enough
-low-level color statistics that the contrastive objective is
-trivially satisfied without the encoder having to learn semantic
-structure. The 21 pp drop quantifies just how much of "what SimCLR
-learns" on CIFAR-10 is *prevented* from collapsing into a color
-shortcut by the rest of the augmentation pipeline.
-
-Temperature was the second-largest, at ±5 pp across the swept range
-(§3.4). The standard interpretation applies: τ = 0.1 makes the
-softmax over similarities so peaked that gradients are dominated by
-the single hardest negative (high variance, slow learning); τ = 5.0
-flattens the distribution to the point that no negative is
-informative and the contrastive signal vanishes; τ ∈ [0.5, 1.0] sits
-in a flat optimum where neither failure mode dominates. The
-projector contributed ~3 pp at 200 epochs (§3.7) and is most
-naturally read, as above, as a convergence accelerator.
-
-Batch size proved the most subtle lever. At matched 200 epochs the
-total spread across {32, 64, 128, 256} on matched hardware is
-0.93 pp (86.34 % → 87.27 %) and is U-shaped, not monotonic — the
-extreme ends are both worse than the bs = 128 apex. The 6 pp
-100-epoch result for the [64, 128, 256] subset came not from a
-"more-negatives-is-better" effect but from bs = 256 being
-undertrained at 19 K gradient steps, while bs = 64/128 had 4× / 2×
-more steps over the same epoch budget. This is in our view a real
-methodological point: most batch-size ablations in the SSL
-literature implicitly compare at matched *epochs*, while the
-underlying "more negatives" argument is a matched-*steps* claim.
-The two framings give different qualitative answers in the
-small-batch regime, and even at matched epochs the relationship is
-not monotonic — bs = 32 demonstrates that there is also a
-lower-bound failure mode where the contrastive signal per step
-becomes too weak for the extra updates to compensate.
-
-The 100-epoch initial round of ablations was, by design, a
-compute-budget compromise rather than a planned methodological
-experiment. In retrospect it functioned as one. By chance it created
-a controlled setting in which the same configurations were run at
-two different gradient-step budgets, and the resulting reversal in
-the batch-size and projector orderings is what motivates the
-"matched-steps vs. matched-epochs" framing of §3.5 and §3.7.
-
-### 4.3 What I would do with more time
-
-Three extensions are natural and would each produce a discrete
-report-level result.
-
-First, extend the batch-size sweep further upward. The current
-range [32, 64, 128, 256] established the U shape and the bs = 128
-apex; running bs = 512 or 1024 on a higher-VRAM card would test
-whether accuracy continues to decline past bs = 256, plateaus, or
-eventually recovers if the per-step gradient quality wins back the
-budget it costs in fewer updates. A finer-grained sweep around the
-apex (e.g. bs ∈ {96, 128, 192}) would tighten the location of the
-optimum.
-
-Second, increase the SSL training budget further. The 600-epoch
-extended run already shows that the kNN curve is nearly flat between
-epoch 400 and epoch 600 (§3.10), but a 1000–1500 epoch run would
-verify that the plateau is stable rather than merely a slow climb,
-and would let us cleanly answer how much of the supervised gap is
-ultimately a representation-quality issue versus a probe-only-linear
-issue.
-
-Third, swap the backbone and the SSL method. ResNet-34 or ResNet-50
-would test whether the SSL-vs-supervised gap narrows or widens with
-backbone capacity, which is one of the more practically relevant
-open questions for downstream applications. Replacing SimCLR with
-MoCo-v2 would reuse 80 % of the existing code and give a second SSL
-method as a sanity baseline, both as a cross-check on the present
-results and as a compatibility test for the matched-step / matched-
-epoch finding above. Beyond that, an augmentation sweep that adds
-new transformations (Gaussian blur tuned for 32×32, mild random
-rotation, mixup-style view blending) would help separate which
-*components* of the standard pipeline carry the weight, beyond the
-already-clear color-vs-crop dichotomy of §3.6.
-
-### 4.4 What I learned
-
-Methodologically, the kNN monitor turned out to be a more
-informative training signal than the contrastive loss itself. The
-600-epoch run's loss decreased monotonically from 4.50 to 4.44 over
-its final 400 epochs while the kNN accuracy gained 3.4 pp and then
-plateaued — the two signals diverge once the cosine-similarity
-geometry continues to sharpen but linear separability has saturated.
-Loss decrease in a contrastive objective is therefore *necessary
-but not sufficient* evidence of representation improvement, and any
-ablation report that compares only final loss values is comparing a
-geometric proxy rather than a representation-quality measure.
-
-Engineering-wise, the resume-safe training loop was the single most
-important infrastructure decision. CIFAR-10 SimCLR runs on consumer
-hardware are 6–15 hour jobs and overlap with operating-system
-updates, driver crashes, and accidental session terminations. Atomic
-per-epoch checkpointing reduced the worst-case loss from "an entire
-overnight run" to "one epoch", and made the multi-host comparison in
-§3.5 (DirectML AMD, RTX 4090, RTX 3060) practically feasible.
-
-On the SimCLR architecture itself, the *h* vs. *z* probing
-asymmetry of §3.7 is in retrospect the most concrete example in this
-project of how representation choice shapes downstream evaluation.
-The projector head is trained to be invariant to the augmentations
-that produce two views of the same image; that invariance is exactly
-what the contrastive objective wants but it is also a destruction
-of any class information correlated with those augmentations. The
-3.6 pp drop from probing *h* to probing *z* (§3.7) quantifies the
-information removed by that invariance, and is a clean illustration
-of why the standard SimCLR recipe explicitly throws *z* away after
-training.
-
-Finally, the transfer-learning result of §3.8 — SimCLR ≥ supervised
-on CIFAR-100 despite supervised having "seen" CIFAR-10 labels — is
-the single observation that makes the SSL paradigm feel
-non-trivial. Supervised cross-entropy on CIFAR-10 trains the encoder
-to discriminate among ten specific classes; SSL trains it to be
-generally consistent under augmentation. The first objective makes
-the encoder's middle layers *worse* than the SSL encoder's at
-representing classes the encoder was never explicitly told about,
-even though the supervised encoder can read off CIFAR-10 labels with
-6 pp higher accuracy. This is a small instance of the broader
-argument for representation learning: an encoder trained on a more
-abstract objective can be more useful in settings the original
-training task did not anticipate.
----
-
-## 5. References
-
-[1] Chen, T., Kornblith, S., Norouzi, M., & Hinton, G. (2020).
-**A Simple Framework for Contrastive Learning of Visual
-Representations**. *Proceedings of the 37th International Conference
-on Machine Learning (ICML 2020)*, 1597–1607. arXiv:2002.05709.
-
-[2] He, K., Zhang, X., Ren, S., & Sun, J. (2016). **Deep Residual
-Learning for Image Recognition**. *CVPR 2016*. arXiv:1512.03385.
-
-[3] Krizhevsky, A. (2009). **Learning Multiple Layers of Features from
-Tiny Images**. Technical report, University of Toronto. (CIFAR-10
-dataset.)
-
-[4] Coates, A., Lee, H., & Ng, A. Y. (2011). **An Analysis of
-Single-Layer Networks in Unsupervised Feature Learning**. *AISTATS
-2011*. (STL-10 dataset.)
-
-[5] van den Oord, A., Li, Y., & Vinyals, O. (2018).
-**Representation Learning with Contrastive Predictive Coding**.
-arXiv:1807.03748. (NT-Xent / InfoNCE loss origin.)
-
-[6] Wu, Z., Xiong, Y., Yu, S. X., & Lin, D. (2018). **Unsupervised
-Feature Learning via Non-Parametric Instance Discrimination**.
-*CVPR 2018*. (Memory-bank precursor; kNN-monitor protocol.)
-
----
+![Left: kNN-monitor trajectories of the 200-epoch and 600-epoch SimCLR runs (identical seed, so the curves overlap perfectly through epoch 200). Right: linear-probe accuracy curves on the two frozen backbones — the 600-epoch backbone is uniformly ≈2 pp above the 200-epoch one across all 100 probe epochs.](figures/fig12_extended_training_comparison.png)
 
 ## Appendix A — Reproducibility & Code
 
