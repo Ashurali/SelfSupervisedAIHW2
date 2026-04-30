@@ -1,5 +1,6 @@
 # Self-Supervised Representation Learning on CIFAR-10
-**AI HW2 — SimCLR with a modified ResNet-18 backbone**
+### SimCLR with a modified ResNet-18 backbone
+**Michael Kurniawan Soegeng 吳忠賢 — 314540066**
 
 ---
 
@@ -32,6 +33,9 @@ checkpoint-resumable, the linear-probe protocol is fixed across
 experiments, and the Phase 1 baseline checkpoint is reused as the
 "baseline row" of every ablation rather than retrained, saving roughly
 40 GPU-hours.
+
+All code, notebooks, results, and figures are available at
+<https://github.com/Ashurali/SelfSupervisedAIHW2>.
 
 ---
 
@@ -507,7 +511,7 @@ surprise — at matched 200 epochs, smaller batches (64, 128) actually
 slightly *outperformed* batch size 256, the opposite of the
 canonical SimCLR finding. What does that say about the role of
 "more negatives" in the contrastive objective?**)*
-
+SimCLR is expectedly worst than Supervised on CIFAR-10 because of the small number of labels, where supervised takes the lead if given a label. The projector benefit surprisingly smaller when trained on epoch 200, an increase from epoch 100. This indicates that the projector itself helps reach convergence faster. The fact that SSL wins on cifar-100 probably means the model is able to generalize well for similar dataset. as mentioned, we suspect this is because of the the difference in distribution where it is known that STL-10 has a broader, more complex and less curated data in comparison to CIFAR-10. The smaller batch sizes winning means it is important to note the unit in which it is talking about. We also did a deeper analysis witholding the cifar-10 data and it showcases the learned representation of the backbone model which is further highlighted in cifar-100 data!
 ### 4.2 Factors affecting results
 
 *(Prompts: which design choice contributed the largest accuracy
@@ -519,16 +523,17 @@ training? Did running ablations at 100 ep first, then re-running at
 200 ep, materially change my conclusions? **Yes — bs and projector
 ablation conclusions both flipped between 100 ep and 200 ep, which
 is itself a methodological point worth discussing.**)*
+The biggest is in augmentation, the biggest in which is the crop only ablation. this shows that the self supervised model used requires the image to be different enough for the model to be able to learn the lower level feature of the images. compared to others Compare to temperature(±5 pp) where it is clear it's a matter of optimizing where too small and the model focuses on noisy data too much, too big and nothing is separated , batch size (±0.6 pp at matched epochs) is a surprise given the smaller batches produces better result, projector (±3 pp) is also quite telling on what effect the projector had on the model. yes the 100 and 200 ep was a coincidence because of limitation but it gives a contrast that shows batch size and projector ablation result.
 
 ### 4.3 What I would do with more time
 
 *(Prompts: extend Phase 1 to 600 + epochs (SimCLR is monotonic);
-re-run ablations at 200 ep so they are directly comparable;
+re-run ablations at 200 ep so they are directly comparable; -> we already did!
 implement a momentum encoder + queue (MoCo-v2) as a second SSL
 method; sweep larger batch sizes (512+) on a higher-VRAM GPU; train
 a deeper backbone (ResNet-34) to test whether SSL benefit grows
 with capacity.)*
-
+Rerun on bigger batch to compare ablation batch sizes. Increase epoch size. Train on a deeper backbone, bigger resnet. Do more different type of augmentation? verify the effects of step vs epoch.
 ### 4.4 What I learned
 
 *(Prompts: how does kNN-monitor compare to loss as a training signal?
@@ -536,7 +541,10 @@ What did writing a resume-safe training loop teach me about
 production ML? What's the difference between linear-probing *h* vs.
 *z*, and why does it matter? Why does SSL transfer better than
 supervised even when supervised "knew" CIFAR-10 labels?)*
-
+kNN-monitor was able to show a decrease in loss, meaning there is progress in learning, that loss in training signal can be missed.
+a model training loop with checkpoint is quite necessary in a long running epoch to ensure hardware limitation to not limit what testing can be done. 
+Linear-probing h is done using the rich backbone output while z pushes it through a lossy transformation. This matters because z is a lossy layer that loses some representation as indicated by the loss of accuracy.
+SSL transfer better because backbone wise it learns more lower level, general representation of the image than supervised that focuses on remembering the label to feature, which may not always produce a better lower level feature in the backbone but is able to predict better on the output.
 ---
 
 ## 5. References
@@ -598,3 +606,60 @@ slowdown from this.
 | 8 | Transfer learning (CIFAR-100 + STL-10)| ~30 min (features cached) |
 | 10| Deeper analysis                       | ~30 min |
 | 1b| Extended SimCLR 600 ep (separate GPU) | ~15 h |
+
+---
+
+## Appendix B — AI tool usage (Claude)
+
+This project was built collaboratively with Anthropic's Claude
+(via Claude Code). For transparency, this appendix lists where AI
+assistance was used and where it was not.
+
+**Where Claude helped.**
+
+* **Project planning and scaffolding.** The 9-phase project plan
+  (`plan.md`) was drafted in conversation; Claude turned it into an
+  initial set of `_build_nbXX.py` notebook generators that share a
+  consistent voice and a common set of helpers in `utils.py`.
+* **Code generation.** All notebook code (training loops, kNN
+  monitor, NT-Xent loss, linear-probe protocol, ablation runners,
+  feature-extraction caching, t-SNE visualization, label-efficiency
+  sweep, etc.) was first drafted by Claude, then read, tested, and
+  edited by me.
+* **Debugging.** A bug in the ablation builders that passed a
+  `ProjectionHead` instance into `SimCLRModel`'s `hidden_dim` int slot
+  surfaced as a cryptic `torch.empty(...)` error; Claude
+  root-caused it and produced the one-line fix.
+* **Experimental design discussion.** When the 100-epoch ablations
+  showed a 6 pp gap favoring bs = 256 and the 200-epoch re-runs
+  showed the opposite, Claude flagged that the comparison conflated
+  hardware (DirectML AMD vs. CUDA RTX 4090) with batch size, and
+  proposed the matched-hardware control script
+  (`verify_bs256_4090.py`) that ultimately produced the verified
+  +0.33 pp number reported in §3.5.
+* **Report drafting.** §1–§3, §5 References, and the appendices were
+  drafted by Claude using the result JSONs and figures as ground
+  truth. I edited those sections after reading them.
+
+**Where Claude did not help.**
+
+* **No model training was performed by Claude.** Every SSL training
+  run, supervised run, ablation, and verification run was launched
+  and executed by me on my own hardware (AMD RX 6750 GRE under
+  DirectML; RTX 3060 for the 600-epoch extended run; RTX 4090 for
+  the 200-epoch ablation re-runs and the matched-hardware
+  verification).
+* **§4 Discussion was written by me.** Claude left scaffolded
+  prompts under each subsection; the actual narrative responses,
+  interpretations, and personal reflections in §4.1–§4.4 are mine.
+* **No copy-paste of model outputs as final claims.** Every numerical
+  value in the tables of §3 was read directly from the result JSONs
+  (`results/*.json`) by Phase 9's aggregator, not transcribed by
+  hand from Claude's text. Any rounding errors in the report are
+  therefore mine via Phase 9, not Claude's.
+
+**Tool details.** Claude Code was used in agentic mode — it read
+files, ran scripts, and edited the codebase directly inside the
+project directory. All edits passed through git, so the full
+revision history (including which commits Claude authored or
+co-authored) is preserved at the GitHub repository linked in §1.
