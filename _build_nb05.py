@@ -53,7 +53,7 @@ from utils import (
 
 SMOKE_TEST = False
 
-BATCH_SIZES     = [128, 64]     # bs=256 comes from Phase 1
+BATCH_SIZES     = [128, 64, 32]   # bs=256 comes from Phase 1
 BASELINE_BS     = 256
 
 cfg = dict(
