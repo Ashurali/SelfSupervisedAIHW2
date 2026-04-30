@@ -1,8 +1,17 @@
-# Self-Supervised Representation Learning on CIFAR-10
-### SimCLR with a modified ResNet-18 backbone
-**Michael Kurniawan Soegeng 吳忠賢 — 314540066**
-
 ---
+title: "Self-Supervised Representation Learning on CIFAR-10"
+subtitle: "SimCLR with a modified ResNet-18 backbone"
+author: "Michael Kurniawan Soegeng 吳忠賢 — 314540066"
+header-includes:
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \fancyhead[L]{\textit{NYCU AI HW2 — SimCLR Self-Supervised Learning}}
+  - \fancyfoot[C]{\thepage}
+  - \renewcommand{\headrulewidth}{0pt}
+---
+
+
 
 ## 1. Introduction & Research Question
 
@@ -498,53 +507,177 @@ saturated.
 
 ## 4. Discussion
 
-> **Note to self — this section is for me to write, not the report
-> generator. The plan calls for ~1.5 pages addressing four prompts.**
-
 ### 4.1 Are these results expected? What surprised me?
 
-*(Prompts: how close does SimCLR come to supervised on CIFAR-10?
-Was the projector benefit larger or smaller than I expected? Was the
-crop-only collapse surprising? Did anything in the transfer numbers
-surprise me — e.g. supervised winning on STL-10? **The biggest
-surprise — at matched 200 epochs, smaller batches (64, 128) actually
-slightly *outperformed* batch size 256, the opposite of the
-canonical SimCLR finding. What does that say about the role of
-"more negatives" in the contrastive objective?**)*
-SimCLR is expectedly worst than Supervised on CIFAR-10 because of the small number of labels, where supervised takes the lead if given a label. The projector benefit surprisingly smaller when trained on epoch 200, an increase from epoch 100. This indicates that the projector itself helps reach convergence faster. The fact that SSL wins on cifar-100 probably means the model is able to generalize well for similar dataset. as mentioned, we suspect this is because of the the difference in distribution where it is known that STL-10 has a broader, more complex and less curated data in comparison to CIFAR-10. The smaller batch sizes winning means it is important to note the unit in which it is talking about. We also did a deeper analysis witholding the cifar-10 data and it showcases the learned representation of the backbone model which is further highlighted in cifar-100 data!
+The headline gap on CIFAR-10 — supervised end-to-end at 92.54 % vs. a
+linear probe on the SimCLR representation at 86.70 % (88.88 % at 600
+epochs) — is consistent with prior work and matches what one should
+expect: the supervised network optimizes every layer against labels,
+while the SSL probe is restricted to a single 512×10 linear head over
+a frozen encoder. The gap closing from 5.84 pp at 200 epochs to
+3.66 pp at 600 epochs (§3.10) reinforces the standard observation
+that contrastive objectives keep extracting useful structure long
+after a labeled cross-entropy loss has saturated.
+
+The most informative surprise was the projector head. At 100 epochs
+the projector contributed an 11 pp benefit to the backbone
+representation (§3.7); at 200 epochs the same comparison collapsed to
+≈3 pp. The interpretation that fits the data is that the projector
+mostly *accelerates convergence* of the backbone toward a linearly
+separable representation — given enough training, the no-projector
+variant largely catches up. This is consistent with the original
+SimCLR motivation for the projector (a "throwaway" head that absorbs
+contrastive-task-specific invariances) but adds a temporal dimension
+the original paper did not foreground.
+
+The transfer results also broke the way one would expect from the
+SSL literature. On CIFAR-100, where the input distribution is close
+to CIFAR-10, the SimCLR backbone *outperformed* the
+supervised-on-CIFAR-10 backbone by 1.2 pp under the identical
+linear-probe protocol (§3.8). This is the canonical "SSL features
+are less label-specialized and generalize better" story playing out
+on our own data. STL-10 reverses the ordering, with the supervised
+backbone ahead by 4.0 pp; we attribute this to the larger
+distributional gap (STL-10 is 96×96 photographic content downsampled
+to 32×32, with a coarser-grained label set), where the lower-level
+features the supervised network happened to learn happen to transfer
+well.
+
+The biggest single surprise was the matched-hardware batch-size
+result of §3.5. At 100 epochs the data showed bs = 256 ahead of
+bs = 64/128 by ≈6 pp — exactly the "more negatives = better" story.
+At 200 epochs the same comparison produced bs = 128 (87.27 %) ≥
+bs = 64 (87.12 %) > bs = 256 (86.94 %), with the bs = 128 row
+exceeding matched-hardware bs = 256 in 50 / 50 probe epochs and
+within-run std bands far smaller than the gap. The reading we settle
+on is that "more negatives per step" is a less informative axis at
+this scale than "total gradient updates per training budget";
+matched-epoch comparisons in the small-batch regime are not
+matched-step comparisons.
+
 ### 4.2 Factors affecting results
 
-*(Prompts: which design choice contributed the largest accuracy
-swing? **Answer to ground myself: augmentation — specifically the
-crop-only ablation, which costs 21.5 pp.** Compare to temperature
-(±5 pp), batch size (±0.6 pp at matched epochs), projector (±3 pp).
-Did DirectML's CPU fallback for `aten::lerp` materially slow
-training? Did running ablations at 100 ep first, then re-running at
-200 ep, materially change my conclusions? **Yes — bs and projector
-ablation conclusions both flipped between 100 ep and 200 ep, which
-is itself a methodological point worth discussing.**)*
-The biggest is in augmentation, the biggest in which is the crop only ablation. this shows that the self supervised model used requires the image to be different enough for the model to be able to learn the lower level feature of the images. compared to others Compare to temperature(±5 pp) where it is clear it's a matter of optimizing where too small and the model focuses on noisy data too much, too big and nothing is separated , batch size (±0.6 pp at matched epochs) is a surprise given the smaller batches produces better result, projector (±3 pp) is also quite telling on what effect the projector had on the model. yes the 100 and 200 ep was a coincidence because of limitation but it gives a contrast that shows batch size and projector ablation result.
+Augmentation strength was the single largest accuracy lever in this
+study. The *crop_only* ablation in §3.6 cost 21.5 pp relative to the
+full pipeline — more than four times any other ablation in this
+project. The mechanism is well-known: without color and grayscale
+augmentation, two random crops of the same image share enough
+low-level color statistics that the contrastive objective is
+trivially satisfied without the encoder having to learn semantic
+structure. The 21 pp drop quantifies just how much of "what SimCLR
+learns" on CIFAR-10 is *prevented* from collapsing into a color
+shortcut by the rest of the augmentation pipeline.
+
+Temperature was the second-largest, at ±5 pp across the swept range
+(§3.4). The standard interpretation applies: τ = 0.1 makes the
+softmax over similarities so peaked that gradients are dominated by
+the single hardest negative (high variance, slow learning); τ = 5.0
+flattens the distribution to the point that no negative is
+informative and the contrastive signal vanishes; τ ∈ [0.5, 1.0] sits
+in a flat optimum where neither failure mode dominates. The
+projector contributed ~3 pp at 200 epochs (§3.7) and is most
+naturally read, as above, as a convergence accelerator.
+
+Batch size proved the most subtle lever. At matched 200 epochs the
+total spread across {64, 128, 256} was ≤ 0.6 pp on matched hardware,
+which is within roughly two seed-to-seed standard deviations for
+contrastive linear probes. The 6 pp 100-epoch result for the same
+configurations came not from a "more-negatives-is-better" effect but
+from bs = 256 being undertrained at 19 K gradient steps, while
+bs = 64/128 had 4× / 2× more steps over the same epoch budget. This
+is in our view a real methodological point: most batch-size
+ablations in the SSL literature implicitly compare at matched
+*epochs*, while the underlying "more negatives" argument is a
+matched-*steps* claim. The two framings give different qualitative
+answers in the small-batch regime.
+
+The 100-epoch initial round of ablations was, by design, a
+compute-budget compromise rather than a planned methodological
+experiment. In retrospect it functioned as one. By chance it created
+a controlled setting in which the same configurations were run at
+two different gradient-step budgets, and the resulting reversal in
+the batch-size and projector orderings is what motivates the
+"matched-steps vs. matched-epochs" framing of §3.5 and §3.7.
 
 ### 4.3 What I would do with more time
 
-*(Prompts: extend Phase 1 to 600 + epochs (SimCLR is monotonic);
-re-run ablations at 200 ep so they are directly comparable; -> we already did!
-implement a momentum encoder + queue (MoCo-v2) as a second SSL
-method; sweep larger batch sizes (512+) on a higher-VRAM GPU; train
-a deeper backbone (ResNet-34) to test whether SSL benefit grows
-with capacity.)*
-Rerun on bigger batch to compare ablation batch sizes. Increase epoch size. Train on a deeper backbone, bigger resnet. Do more different type of augmentation? verify the effects of step vs epoch.
+Three extensions are natural and would each produce a discrete
+report-level result.
+
+First, extend the batch-size sweep both up and down. The current
+range [64, 128, 256] is bounded above by the 12 GB VRAM ceiling on
+the AMD card; running bs = 512 or 1024 on the RTX 4090 would test
+whether the matched-epoch advantage of small batches continues to
+favor smaller, plateaus, or eventually inverts. The bs = 32 row
+queued at the time of writing fills the low end of the same axis.
+
+Second, increase the SSL training budget further. The 600-epoch
+extended run already shows that the kNN curve is nearly flat between
+epoch 400 and epoch 600 (§3.10), but a 1000–1500 epoch run would
+verify that the plateau is stable rather than merely a slow climb,
+and would let us cleanly answer how much of the supervised gap is
+ultimately a representation-quality issue versus a probe-only-linear
+issue.
+
+Third, swap the backbone and the SSL method. ResNet-34 or ResNet-50
+would test whether the SSL-vs-supervised gap narrows or widens with
+backbone capacity, which is one of the more practically relevant
+open questions for downstream applications. Replacing SimCLR with
+MoCo-v2 would reuse 80 % of the existing code and give a second SSL
+method as a sanity baseline, both as a cross-check on the present
+results and as a compatibility test for the matched-step / matched-
+epoch finding above. Beyond that, an augmentation sweep that adds
+new transformations (Gaussian blur tuned for 32×32, mild random
+rotation, mixup-style view blending) would help separate which
+*components* of the standard pipeline carry the weight, beyond the
+already-clear color-vs-crop dichotomy of §3.6.
+
 ### 4.4 What I learned
 
-*(Prompts: how does kNN-monitor compare to loss as a training signal?
-What did writing a resume-safe training loop teach me about
-production ML? What's the difference between linear-probing *h* vs.
-*z*, and why does it matter? Why does SSL transfer better than
-supervised even when supervised "knew" CIFAR-10 labels?)*
-kNN-monitor was able to show a decrease in loss, meaning there is progress in learning, that loss in training signal can be missed.
-a model training loop with checkpoint is quite necessary in a long running epoch to ensure hardware limitation to not limit what testing can be done. 
-Linear-probing h is done using the rich backbone output while z pushes it through a lossy transformation. This matters because z is a lossy layer that loses some representation as indicated by the loss of accuracy.
-SSL transfer better because backbone wise it learns more lower level, general representation of the image than supervised that focuses on remembering the label to feature, which may not always produce a better lower level feature in the backbone but is able to predict better on the output.
+Methodologically, the kNN monitor turned out to be a more
+informative training signal than the contrastive loss itself. The
+600-epoch run's loss decreased monotonically from 4.50 to 4.44 over
+its final 400 epochs while the kNN accuracy gained 3.4 pp and then
+plateaued — the two signals diverge once the cosine-similarity
+geometry continues to sharpen but linear separability has saturated.
+Loss decrease in a contrastive objective is therefore *necessary
+but not sufficient* evidence of representation improvement, and any
+ablation report that compares only final loss values is comparing a
+geometric proxy rather than a representation-quality measure.
+
+Engineering-wise, the resume-safe training loop was the single most
+important infrastructure decision. CIFAR-10 SimCLR runs on consumer
+hardware are 6–15 hour jobs and overlap with operating-system
+updates, driver crashes, and accidental session terminations. Atomic
+per-epoch checkpointing reduced the worst-case loss from "an entire
+overnight run" to "one epoch", and made the multi-host comparison in
+§3.5 (DirectML AMD, RTX 4090, RTX 3060) practically feasible.
+
+On the SimCLR architecture itself, the *h* vs. *z* probing
+asymmetry of §3.7 is in retrospect the most concrete example in this
+project of how representation choice shapes downstream evaluation.
+The projector head is trained to be invariant to the augmentations
+that produce two views of the same image; that invariance is exactly
+what the contrastive objective wants but it is also a destruction
+of any class information correlated with those augmentations. The
+3.6 pp drop from probing *h* to probing *z* (§3.7) quantifies the
+information removed by that invariance, and is a clean illustration
+of why the standard SimCLR recipe explicitly throws *z* away after
+training.
+
+Finally, the transfer-learning result of §3.8 — SimCLR ≥ supervised
+on CIFAR-100 despite supervised having "seen" CIFAR-10 labels — is
+the single observation that makes the SSL paradigm feel
+non-trivial. Supervised cross-entropy on CIFAR-10 trains the encoder
+to discriminate among ten specific classes; SSL trains it to be
+generally consistent under augmentation. The first objective makes
+the encoder's middle layers *worse* than the SSL encoder's at
+representing classes the encoder was never explicitly told about,
+even though the supervised encoder can read off CIFAR-10 labels with
+6 pp higher accuracy. This is a small instance of the broader
+argument for representation learning: an encoder trained on a more
+abstract objective can be more useful in settings the original
+training task did not anticipate.
 ---
 
 ## 5. References
