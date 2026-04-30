@@ -1,0 +1,23 @@
+% LaTeX preamble injected by pandoc when rendering report.md -> report.pdf.
+% Tunes figure size, caption style, list spacing, section spacing, and
+% paragraph/float spacing so the report fits its page budget without
+% sacrificing legibility.
+
+\usepackage{graphicx}
+\setkeys{Gin}{width=0.6\linewidth,keepaspectratio}
+
+\usepackage{caption}
+\captionsetup{font=small,skip=2pt}
+
+\usepackage{enumitem}
+\setlist{nosep,topsep=2pt,partopsep=2pt}
+
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{1em}{0.4em}
+\titlespacing*{\subsection}{0pt}{0.6em}{0.3em}
+\titlespacing*{\subsubsection}{0pt}{0.4em}{0.2em}
+
+\setlength{\parskip}{0.3em}
+\setlength{\parsep}{0pt}
+\setlength{\floatsep}{6pt}
+\setlength{\textfloatsep}{6pt}
