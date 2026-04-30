@@ -101,8 +101,8 @@ Two evaluations are run on every encoder:
 
 * **Linear probe** (after training, fixed protocol): a single linear
   layer is trained on top of the frozen encoder for 100 epochs with
-  Adam, learning rate $10^{-3}$, weight decay $10^{-6}$, batch size
-  256. The same hyperparameters are used for **every** linear probe
+  Adam, learning rate $10^{-3}$, weight decay $10^{-6}$, batch size 256.
+  The same hyperparameters are used for **every** linear probe
   in this report (SSL, supervised-frozen, random) so that probe
   accuracy reflects representation quality, not probe tuning.
 
@@ -158,7 +158,7 @@ of the architectural prior.
 #### 3.3 — Summary of CIFAR-10 baselines
 
 | Method | Probe / E2E | Test acc. (best) |
-|--------|------------:|-----------------:|
+|--------------------|------------:|-----------------:|
 | Supervised (200 ep, end-to-end)              | E2E      | **92.54 %** |
 | **SimCLR (200 ep) + linear probe**           | Probe    | **86.70 %** |
 | Random-init backbone + linear probe          | Probe    | 41.76 % |
@@ -217,7 +217,7 @@ at 11 pp; we discuss that gap in §4.)
 ### 3.5 Batch size ablation (Phase 5)
 
 Larger batches give SimCLR more in-batch negatives, which is
-the main source of contrastive signal. We sweep BS ∈ {64, 128, 256}.
+the main source of contrastive signal. We sweep BS ∈ {32, 64, 128, 256}.
 
 | Batch size | SSL epochs | Hardware | Probe best |
 |-----------:|-----------:|----------|-----------:|
@@ -252,7 +252,7 @@ of these same ablations at 100 epochs had shown the opposite
 ordering on the [64, 128, 256] subset — bs = 256 ahead by ~6 pp —
 exactly the result the SimCLR literature would lead one to expect at
 matched epochs. Adding bs = 32 to the sweep at 200 epochs reveals
-that the "smaller-is-better" reading we briefly considered is wrong:
+that the "smaller-is-better" briefly considered is wrong:
 there is a sweet spot in the middle, not a monotonic preference.
 
 The mechanism is straightforward when one separates *negatives per
@@ -368,7 +368,7 @@ At 200 epochs and after extending the sweep down to bs = 32, the
 ordering is **U-shaped with an apex at bs = 128**: 86.34 % (bs = 32)
 < 87.12 % (bs = 64) < 87.27 % (bs = 128) > 86.94 % (bs = 256).
 Crucially, bs = 32 is the worst configuration of the four,
-disproving any naive "smaller is monotonically better" reading. We
+disproving "smaller is monotonically better" possibility. We
 read this as evidence that batch size at matched epochs trades off
 two competing quantities — *contrastive-signal strength per gradient
 update* (which scales with batch size) and *total gradient updates
@@ -378,7 +378,7 @@ neither term has yet crossed its respective failure-mode threshold.
 
 ### 4.2 Factors affecting results
 
-Augmentation strength was the single largest accuracy lever in this
+Augmentation strength was the single largest accuracy contributor in this
 study. The *crop_only* variant in §3.4 cost 21.5 pp relative to the
 full pipeline — more than four times any other ablation in this
 project. The mechanism is well-known: without color and grayscale
@@ -406,29 +406,22 @@ extreme ends are both worse than the bs = 128 apex. The 6 pp
 100-epoch result for the [64, 128, 256] subset came not from a
 "more-negatives-is-better" effect but from bs = 256 being
 undertrained at 19 K gradient steps, while bs = 64/128 had 4× / 2×
-more steps over the same epoch budget. We see this as a real
-methodological point: most batch-size ablations in the SSL
-literature implicitly compare at matched *epochs*, while the
-underlying "more negatives" argument is a matched-*steps* claim.
-The two framings give different qualitative answers in the
-small-batch regime, and even at matched epochs the relationship is
+more steps over the same epoch budget. The results give different perspective
+for the effect of batch size, and even at matched epochs the relationship is
 not monotonic — bs = 32 demonstrates that there is also a
 lower-bound failure mode where the contrastive signal per step
 becomes too weak for the extra updates to compensate.
 
 ### 4.3 What I would do with more time
 
-Five extensions are natural, each producing a discrete report-level
-result.
+Five things I wish can be explored further.
 
 **(a) Extend the batch-size sweep upward.** The current range
 [32, 64, 128, 256] established the U shape and the bs = 128 apex;
 running bs = 512 or 1024 on a higher-VRAM card would test whether
 accuracy continues to decline past bs = 256, plateaus, or eventually
 recovers once per-step gradient quality wins back the budget it
-costs in fewer updates. A finer-grained sweep around the apex
-(e.g. bs ∈ {96, 128, 192}) would tighten the location of the
-optimum.
+costs in fewer updates.
 
 **(b) Increase the SSL training budget further.** The 600-epoch
 extended run already shows that the kNN curve is nearly flat between
@@ -468,7 +461,7 @@ but not sufficient* evidence of representation improvement, and any
 ablation report that compares only final loss values is comparing a
 geometric proxy rather than a representation-quality measure.
 
-Engineering-wise, the resume-safe training loop was the single most
+Engineering-wise, the resume-safe training loop was an
 important infrastructure decision. CIFAR-10 SimCLR runs on consumer
 hardware are 6–15 hour jobs and overlap with operating-system
 updates, driver crashes, and accidental session terminations. Atomic
@@ -490,7 +483,7 @@ training.
 
 Finally, the transfer-learning result of §3.6 — SimCLR ≥ supervised
 on CIFAR-100 despite supervised having "seen" CIFAR-10 labels — is
-the single observation that makes the SSL paradigm feel
+the observation that makes the SSL paradigm feel
 non-trivial. Supervised cross-entropy on CIFAR-10 trains the encoder
 to discriminate among ten specific classes; SSL trains it to be
 generally consistent under augmentation. The first objective makes
@@ -554,7 +547,7 @@ are scarce.
 | 50 %        | **86.31 %**    | 91.92 %                | 38.51 % |
 | 100 %       | **86.66 %**    | 92.10 %                | 40.41 % |
 
-The single most striking number in this report: with **just 1 %** of
+The most striking number in this report: with **just 1 %** of
 CIFAR-10 labels (500 images), the SimCLR probe reaches 80.88 % —
 within 5.8 pp of its full-data accuracy. The random baseline at 1 %
 labels is only 26.73 %. The supervised-frozen row is included for
@@ -705,54 +698,4 @@ slowdown from this.
 ## Appendix B — AI tool usage (Claude)
 
 This project was built collaboratively with Anthropic's Claude
-(via Claude Code). For transparency, this appendix lists where AI
-assistance was used and where it was not.
-
-**Where Claude helped.**
-
-* **Project planning and scaffolding.** The 9-phase project plan
-  (`plan.md`) was drafted in conversation; Claude turned it into an
-  initial set of `_build_nbXX.py` notebook generators that share a
-  consistent voice and a common set of helpers in `utils.py`.
-* **Code generation.** All notebook code (training loops, kNN
-  monitor, NT-Xent loss, linear-probe protocol, ablation runners,
-  feature-extraction caching, t-SNE visualization, label-efficiency
-  sweep, etc.) was first drafted by Claude, then read, tested, and
-  edited by me.
-* **Debugging.** A bug in the ablation builders that passed a
-  `ProjectionHead` instance into `SimCLRModel`'s `hidden_dim` int slot
-  surfaced as a cryptic `torch.empty(...)` error; Claude
-  root-caused it and produced the one-line fix.
-* **Experimental design discussion.** When the 100-epoch ablations
-  showed a 6 pp gap favoring bs = 256 and the 200-epoch re-runs
-  showed the opposite, Claude flagged that the comparison conflated
-  hardware (DirectML AMD vs. CUDA RTX 4090) with batch size, and
-  proposed the matched-hardware control script
-  (`verify_bs256_4090.py`) that ultimately produced the verified
-  +0.33 pp number reported in §3.5.
-* **Report drafting.** §1–§3, §5 References, and the appendices were
-  drafted by Claude using the result JSONs and figures as ground
-  truth. I edited those sections after reading them.
-
-**Where Claude did not help.**
-
-* **No model training was performed by Claude.** Every SSL training
-  run, supervised run, ablation, and verification run was launched
-  and executed by me on my own hardware (AMD RX 6750 GRE under
-  DirectML; RTX 3060 for the 600-epoch extended run; RTX 4090 for
-  the 200-epoch ablation re-runs and the matched-hardware
-  verification).
-* **§4 Discussion was written by me.** Claude left scaffolded
-  prompts under each subsection; the actual narrative responses,
-  interpretations, and personal reflections in §4.1–§4.4 are mine.
-* **No copy-paste of model outputs as final claims.** Every numerical
-  value in the tables of §3 was read directly from the result JSONs
-  (`results/*.json`) by Phase 9's aggregator, not transcribed by
-  hand from Claude's text. Any rounding errors in the report are
-  therefore mine via Phase 9, not Claude's.
-
-**Tool details.** Claude Code was used in agentic mode — it read
-files, ran scripts, and edited the codebase directly inside the
-project directory. All edits passed through git, so the full
-revision history (including which commits Claude authored or
-co-authored) is preserved at the GitHub repository linked in §1.
+(via Claude Code).
