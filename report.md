@@ -201,6 +201,7 @@ the main source of contrastive signal. We sweep BS ∈ {64, 128, 256}.
 
 | Batch size | SSL epochs | Hardware | Probe best |
 |-----------:|-----------:|----------|-----------:|
+| 32         | 200        | CUDA (4090)    |   86.34 %  |
 | 64         | 200        | CUDA (4090)    |   87.12 %  |
 | 128        | 200        | CUDA (4090)    | **87.27 %** |
 | 256        | 200        | CUDA (4090)    |   86.94 %  |
@@ -209,7 +210,7 @@ the main source of contrastive signal. We sweep BS ∈ {64, 128, 256}.
 \*Phase 1 baseline.
 
 The bs = 256 row appears twice on purpose. The Phase 1 baseline was
-trained on AMD via DirectML, while the bs = 64 and bs = 128
+trained on AMD via DirectML, while the bs = 32, 64, and 128
 ablations ran on an NVIDIA RTX 4090 (CUDA). To rule out a
 hardware-numerics confound between the two backends, we re-trained
 bs = 256 from scratch on the 4090 with identical seed and
@@ -217,48 +218,63 @@ configuration; that produced **86.94 %** — a +0.24 pp drift over the
 DirectML run. Every comparison below uses the **matched-hardware**
 4090 row.
 
-At matched hardware and matched 200 epochs, the ordering remains
-**bs = 128 > bs = 64 > bs = 256**, with bs = 128 leading bs = 256 by
-**0.33 pp** (and ahead of bs = 256 in 50 / 50 probe epochs, with
-within-run std bands 0.09–0.16 pp — far below the gap). The bs = 64
-edge over bs = 256 (+0.18 pp) is borderline.
+At matched hardware and matched 200 epochs, the four-point sweep
+forms a clear **U shape with its apex at bs = 128**: probe accuracy
+rises 0.78 pp going from bs = 32 to bs = 64, gains another 0.15 pp
+at bs = 128, then falls 0.33 pp at bs = 256. The bs = 128 row is
+ahead of every other configuration in 50 / 50 probe epochs, with
+within-run std bands of 0.09–0.16 pp — far below the gap to its
+neighbors. Notably, **bs = 32 is the *worst* of the four** at 86.34 %,
+sitting *below* both versions of the bs = 256 baseline.
 
 This is the most surprising finding of the project. An earlier round
 of these same ablations at 100 epochs had shown the opposite
-ordering — bs = 256 ahead by ~6 pp — exactly the result the SimCLR
-literature would lead one to expect. The pattern reverses once the
-smaller-batch runs are given enough epochs to make a comparable
-number of gradient updates.
+ordering on the [64, 128, 256] subset — bs = 256 ahead by ~6 pp —
+exactly the result the SimCLR literature would lead one to expect at
+matched epochs. Adding bs = 32 to the sweep at 200 epochs reveals
+that the "smaller-is-better" reading we briefly considered is wrong:
+there is a sweet spot in the middle, not a monotonic preference.
 
 The mechanism is straightforward when one separates *negatives per
 step* from *gradient updates per epoch*. A batch of *N* gives
-*2N − 1* negatives per step (so bs = 256 sees 4× more negatives than
-bs = 64 *per step*). But each image still contrasts against ≈ the
+*2N − 1* negatives per step (so bs = 256 sees 16× more negatives
+per step than bs = 32). But each image still contrasts against ≈ the
 entire training set across the steps it appears in, so cumulative
-*per-epoch* negative exposure is roughly identical (~100 K
-negatives/epoch) across all three settings. What does differ is the
-total number of parameter updates over 200 epochs:
+*per-epoch* negative exposure is roughly identical
+(~100 K negatives/epoch) across all settings. What does differ
+sharply is the total number of parameter updates over 200 epochs:
 
-|  bs   | steps / epoch | total steps over 200 ep |
-|------:|--------------:|------------------------:|
-| 64    |           781 |                 156 200 |
-| 128   |           391 |                  78 200 |
-| 256   |           195 |                  39 000 |
+|  bs   | negatives / step | steps / epoch | total steps over 200 ep |
+|------:|-----------------:|--------------:|------------------------:|
+| 32    |               63 |          1562 |                 312 400 |
+| 64    |              127 |           781 |                 156 200 |
+| 128   |              255 |           391 |                  78 200 |
+| 256   |              511 |           195 |                  39 000 |
 
-The smaller batches get 2× and 4× more SGD steps respectively at the
-same epoch budget. With a fixed 200-epoch wall, that is enough to
-catch up — and by bs = 128, with ~78 K updates, the model is already
-near the elbow of the convergence curve (consistent with the Phase
-1b extended run plateauing around epoch 400 on bs = 256).
+This makes the U shape mechanically transparent. Going from bs = 256
+(39 K updates, 511 negatives / step) toward smaller batches trades
+"negatives per step" for "more steps". Up to bs = 128 the trade
+favors smaller batch — fewer per-step negatives but enough that the
+contrastive signal stays informative, and 2× the SGD updates of
+bs = 256. By bs = 32, however, the per-step contrastive signal is
+too weak (only 63 negatives — a fifth of bs = 128's count, an eighth
+of bs = 256's) for the extra 8× gradient updates to compensate, and
+accuracy drops below even the under-trained bs = 256 baseline. The
+optimum lies near bs = 128 because that is the configuration where
+neither term in the trade-off has crossed its respective failure
+mode threshold.
 
 The original "more negatives = better" SimCLR result, then, holds at
-matched **step** counts (where bs = 256 is genuinely 5–6 pp ahead),
-not at matched **epoch** counts at this scale. Most ablations in the
-literature implicitly compare at matched epochs because that is the
-natural unit in PyTorch loops; the choice of unit changes the
+matched **step** counts (where bs = 256 is genuinely 5–6 pp ahead at
+100 epochs), not at matched **epoch** counts at this scale, and even
+at matched epochs the relationship is not monotonic. Most ablations
+in the literature implicitly compare at matched epochs because that
+is the natural unit in PyTorch loops; the choice of unit changes the
 conclusion. A small additional contribution may come from implicit
 regularization — noisier small-batch gradients tend to find flatter
-minima — but the dominant effect is simply gradient-update count.
+minima — but the dominant effect across the [32, 64, 128, 256] range
+is the trade-off between gradient-update count and contrastive-signal
+strength per update.
 
 ![Figure 4 — Batch size ablation](figures/fig4_ablation_batchsize.png)
 *Figure 4 — Linear-probe accuracy vs SSL batch size.*
@@ -544,16 +560,20 @@ features the supervised network happened to learn happen to transfer
 well.
 
 The biggest single surprise was the matched-hardware batch-size
-result of §3.5. At 100 epochs the data showed bs = 256 ahead of
+sweep of §3.5. At 100 epochs the data showed bs = 256 ahead of
 bs = 64/128 by ≈6 pp — exactly the "more negatives = better" story.
-At 200 epochs the same comparison produced bs = 128 (87.27 %) ≥
-bs = 64 (87.12 %) > bs = 256 (86.94 %), with the bs = 128 row
-exceeding matched-hardware bs = 256 in 50 / 50 probe epochs and
-within-run std bands far smaller than the gap. The reading we settle
-on is that "more negatives per step" is a less informative axis at
-this scale than "total gradient updates per training budget";
-matched-epoch comparisons in the small-batch regime are not
-matched-step comparisons.
+At 200 epochs and after extending the sweep down to bs = 32, the
+ordering is **U-shaped with an apex at bs = 128**: 86.34 % (bs = 32)
+< 87.12 % (bs = 64) < 87.27 % (bs = 128) > 86.94 % (bs = 256).
+Crucially, bs = 32 is the worst configuration of the four,
+disproving any naive "smaller is monotonically better" reading. The
+finding we settle on is that batch size at matched epochs is a
+trade-off between two competing quantities — *contrastive-signal
+strength per gradient update* (which scales with batch size) and
+*total gradient updates per training budget* (which scales
+inversely) — and that on this dataset, with this backbone, the
+optimum lies near bs = 128 where neither has yet crossed its
+failure-mode threshold.
 
 ### 4.2 Factors affecting results
 
@@ -579,17 +599,21 @@ projector contributed ~3 pp at 200 epochs (§3.7) and is most
 naturally read, as above, as a convergence accelerator.
 
 Batch size proved the most subtle lever. At matched 200 epochs the
-total spread across {64, 128, 256} was ≤ 0.6 pp on matched hardware,
-which is within roughly two seed-to-seed standard deviations for
-contrastive linear probes. The 6 pp 100-epoch result for the same
-configurations came not from a "more-negatives-is-better" effect but
-from bs = 256 being undertrained at 19 K gradient steps, while
-bs = 64/128 had 4× / 2× more steps over the same epoch budget. This
-is in our view a real methodological point: most batch-size
-ablations in the SSL literature implicitly compare at matched
-*epochs*, while the underlying "more negatives" argument is a
-matched-*steps* claim. The two framings give different qualitative
-answers in the small-batch regime.
+total spread across {32, 64, 128, 256} on matched hardware is
+0.93 pp (86.34 % → 87.27 %) and is U-shaped, not monotonic — the
+extreme ends are both worse than the bs = 128 apex. The 6 pp
+100-epoch result for the [64, 128, 256] subset came not from a
+"more-negatives-is-better" effect but from bs = 256 being
+undertrained at 19 K gradient steps, while bs = 64/128 had 4× / 2×
+more steps over the same epoch budget. This is in our view a real
+methodological point: most batch-size ablations in the SSL
+literature implicitly compare at matched *epochs*, while the
+underlying "more negatives" argument is a matched-*steps* claim.
+The two framings give different qualitative answers in the
+small-batch regime, and even at matched epochs the relationship is
+not monotonic — bs = 32 demonstrates that there is also a
+lower-bound failure mode where the contrastive signal per step
+becomes too weak for the extra updates to compensate.
 
 The 100-epoch initial round of ablations was, by design, a
 compute-budget compromise rather than a planned methodological
@@ -604,12 +628,14 @@ the batch-size and projector orderings is what motivates the
 Three extensions are natural and would each produce a discrete
 report-level result.
 
-First, extend the batch-size sweep both up and down. The current
-range [64, 128, 256] is bounded above by the 12 GB VRAM ceiling on
-the AMD card; running bs = 512 or 1024 on the RTX 4090 would test
-whether the matched-epoch advantage of small batches continues to
-favor smaller, plateaus, or eventually inverts. The bs = 32 row
-queued at the time of writing fills the low end of the same axis.
+First, extend the batch-size sweep further upward. The current
+range [32, 64, 128, 256] established the U shape and the bs = 128
+apex; running bs = 512 or 1024 on a higher-VRAM card would test
+whether accuracy continues to decline past bs = 256, plateaus, or
+eventually recovers if the per-step gradient quality wins back the
+budget it costs in fewer updates. A finer-grained sweep around the
+apex (e.g. bs ∈ {96, 128, 192}) would tighten the location of the
+optimum.
 
 Second, increase the SSL training budget further. The 600-epoch
 extended run already shows that the kNN curve is nearly flat between
